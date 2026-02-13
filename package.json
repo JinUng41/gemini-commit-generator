@@ -1,6 +1,6 @@
 {
   "name": "@devjinung41/gemini-commit-generator",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "private": false,
   "description": "AI-powered git commit message generator using Gemini CLI",
   "main": "index.js",
