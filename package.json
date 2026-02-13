@@ -1,6 +1,7 @@
 {
-  "name": "@jinung41/gemini-commit-generator",
+  "name": "@devjinung41/gemini-commit-generator",
   "version": "1.0.0",
+  "private": false,
   "description": "AI-powered git commit message generator using Gemini CLI",
   "main": "index.js",
   "bin": {
@@ -21,5 +22,8 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/JinUng41/gemini-commit-generator.git"
+  },
+  "dependencies": {
+    "@devjinung41/gemini-commit-generator": "^1.0.0"
   }
 }

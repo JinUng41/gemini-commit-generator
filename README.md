@@ -20,7 +20,7 @@ A cross-platform, zero-config AI commit tool that learns your project's style an
 
 ### Install via npm (Global)
 ```bash
-npm install -g @jinung41/gemini-commit-generator
+npm install -g @devjinung41/gemini-commit-generator
 ```
 
 ## 💡 Usage

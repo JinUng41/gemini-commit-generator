@@ -20,7 +20,7 @@ Node.js 기반으로 모든 운영체제를 지원하는 지능형 AI 커밋 도
 
 ### npm으로 설치 (글로벌)
 ```bash
-npm install -g @jinung41/gemini-commit-generator
+npm install -g @devjinung41/gemini-commit-generator
 ```
 
 ## 💡 사용 방법
