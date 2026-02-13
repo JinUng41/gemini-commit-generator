@@ -22,9 +22,9 @@ npm install -g @jinung41/gemini-commit-generator
 ```
 
 ## 💡 Usage
-Just type `aic` in any git repository:
+Just type `gcg` in any git repository:
 ```bash
-aic
+gcg
 ```
 
 ## 🔄 Updating

@@ -4,7 +4,7 @@
   "description": "AI-powered git commit message generator using Gemini CLI",
   "main": "index.js",
   "bin": {
-    "aic": "./index.js"
+    "gcg": "./index.js"
   },
   "engines": {
     "node": ">=14.0.0"
