@@ -30,7 +30,19 @@ aic
 1. It stages all changes (`git add .`).
 2. It asks for optional context.
 3. Gemini analyzes the `diff` and `history` to propose a message.
-4. You choose to **Commit**, **Regenerate**, **Edit**, or **Cancel**.
+4. You choose to **Commit**, **Regenerate**, **Edit**, **Update**, or **Cancel**.
+
+## 🔄 Updating
+To update to the latest version:
+```bash
+aic --update
+```
+
+## 🗑️ Uninstallation
+To remove aic from your system:
+```bash
+aic --uninstall
+```
 
 ## 📄 License
 This project is licensed under the MIT License.

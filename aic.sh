@@ -36,9 +36,35 @@ update_aic() {
     rm -f "$TMP_FILE"
 }
 
-# Handle --update flag
+# Function to uninstall the script
+uninstall_aic() {
+    SCRIPT_PATH=$(command -v aic)
+    if [ -z "$SCRIPT_PATH" ]; then
+        echo -e "\033[1;31m❌ Error: 'aic' is not installed in your PATH.\033[0m"
+        exit 1
+    fi
+
+    echo -e "\033[1;33m⚠️  Are you sure you want to uninstall aic? (y/N)\033[0m"
+    read -p "> " confirm
+    if [[ "$confirm" == [yY] || "$confirm" == [yY][eE][sS] ]]; then
+        rm "$SCRIPT_PATH"
+        if [ $? -eq 0 ]; then
+            echo -e "\033[1;32m✅ aic has been successfully uninstalled.\033[0m"
+            exit 0
+        else
+            echo -e "\033[1;31m❌ Failed to uninstall. You might need sudo privileges.\033[0m"
+        fi
+    else
+        echo "Uninstallation cancelled."
+    fi
+}
+
+# Handle flags
 if [[ "$1" == "--update" ]]; then
     update_aic
+    exit 0
+elif [[ "$1" == "--uninstall" ]]; then
+    uninstall_aic
     exit 0
 fi
 
