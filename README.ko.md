@@ -18,7 +18,7 @@ Google Gemini CLI를 사용하여 프로젝트의 스타일을 학습하고 고�
 ### 빠른 설치 (macOS/Linux)
 터미널에서 다음 명령어를 실행하세요:
 ```bash
-curl -sSL https://raw.githubusercontent.com/JinUng41/gemini-commit-generator/main/aic.sh -o /usr/local/bin/aic && chmod +x /usr/local/bin/aic
+curl -sSL https://raw.githubusercontent.com/JinUng41/gemini-commit-generator/main/aic.sh -o /usr/local/bin/aic && chmod +x /usr/local/bin/aic && echo -e "\n\033[1;32m🎉 aic 설치가 완료되었습니다! 'aic'를 입력하여 시작하세요.\033[0m"
 ```
 
 ## 💡 사용 방법

@@ -27,12 +27,13 @@ update_aic() {
         if [ -s "$TMP_FILE" ]; then
             mv "$TMP_FILE" "$SCRIPT_PATH"
             chmod +x "$SCRIPT_PATH"
-            echo -e "\033[1;32m🎉 aic has been updated to the latest version!\033[0m"
+            echo -e "\n\033[1;32m🎉 Success! aic has been updated to the latest version.\033[0m"
+            echo -e "\033[1;34mCheck out the latest features at: https://github.com/JinUng41/gemini-commit-generator\033[0m"
             exit 0
         fi
     fi
     
-    echo -e "\033[1;31m❌ Update failed. Please check your internet connection or repository URL.\033[0m"
+    echo -e "\n\033[1;31m❌ Update failed. Please check your internet connection or repository URL.\033[0m"
     rm -f "$TMP_FILE"
 }
 
@@ -40,22 +41,23 @@ update_aic() {
 uninstall_aic() {
     SCRIPT_PATH=$(command -v aic)
     if [ -z "$SCRIPT_PATH" ]; then
-        echo -e "\033[1;31m❌ Error: 'aic' is not installed in your PATH.\033[0m"
+        echo -e "\n\033[1;31m❌ Error: 'aic' is not installed in your PATH.\033[0m"
         exit 1
     fi
 
-    echo -e "\033[1;33m⚠️  Are you sure you want to uninstall aic? (y/N)\033[0m"
+    echo -e "\n\033[1;33m⚠️  Are you sure you want to uninstall aic? (y/N)\033[0m"
     read -p "> " confirm
     if [[ "$confirm" == [yY] || "$confirm" == [yY][eE][sS] ]]; then
         rm "$SCRIPT_PATH"
         if [ $? -eq 0 ]; then
-            echo -e "\033[1;32m✅ aic has been successfully uninstalled.\033[0m"
+            echo -e "\n\033[1;32m✅ Done! aic has been successfully removed from your system.\033[0m"
+            echo -e "\033[1;34mThank you for using gemini-commit-generator!\033[0m"
             exit 0
         else
-            echo -e "\033[1;31m❌ Failed to uninstall. You might need sudo privileges.\033[0m"
+            echo -e "\n\033[1;31m❌ Failed to uninstall. You might need sudo privileges.\033[0m"
         fi
     else
-        echo "Uninstallation cancelled."
+        echo -e "\n\033[1;34mUninstallation cancelled.\033[0m"
     fi
 }
 
