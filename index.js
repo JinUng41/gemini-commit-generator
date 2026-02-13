@@ -52,7 +52,10 @@ const STRINGS = {
     invalid: 'Invalid selection.',
     error: '\nAn unexpected error occurred:',
     promptLang: 'English',
-    promptExample: '- index.js: Refactor AI prompt and optimize performance'
+    promptExample: '- index.js: Refactor AI prompt and optimize performance',
+    errNotInstalled: '❌ Gemini CLI is not installed. Please install it using: npm install -g @google/gemini-cli',
+    errNotAuthenticated: '🔑 Gemini CLI authentication required. Please run the "gemini" command in your terminal, follow the instructions to log in (e.g., Google login), and then try this program again.',
+    errNotGit: '📁 This is not a git repository. Please run this command inside a git project.'
   },
   ko: {
     starting: '\n🚀 AI 커밋 생성기를 시작합니다...',
@@ -80,7 +83,10 @@ const STRINGS = {
     invalid: '잘못된 선택입니다.',
     error: '\n예상치 못한 오류가 발생했습니다:',
     promptLang: 'KOREAN (한국어)',
-    promptExample: '- index.js: AI 프롬프트 수정 및 성능 최적화'
+    promptExample: '- index.js: AI 프롬프트 수정 및 성능 최적화',
+    errNotInstalled: '❌ Gemini CLI가 설치되어 있지 않습니다. 다음 명령어로 설치해주세요: npm install -g @google/gemini-cli',
+    errNotAuthenticated: '🔑 Gemini CLI 인증이 필요합니다. 터미널에서 "gemini" 명령어를 입력하여 안내에 따라 구글 로그인 등을 마친 뒤 다시 실행해주세요.',
+    errNotGit: '📁 이곳은 Git 저장소가 아닙니다. Git 프로젝트 내부에서 실행해주세요.'
   }
 };
 
@@ -229,10 +235,23 @@ async function run(selectedLang = null) {
   
   try {
     // 1. Validate Environment
-    await Promise.all([
-      execAsync('gemini --version').catch(() => { throw new Error('gemini CLI not installed'); }),
-      execAsync('git rev-parse --is-inside-work-tree').catch(() => { throw new Error('Not a git repository'); })
-    ]);
+    try {
+      await execAsync('gemini --version');
+    } catch (e) {
+      step2.stop('❌', COLORS.red);
+      console.error(`${COLORS.red}${t.errNotInstalled}${COLORS.reset}`);
+      rl.close();
+      process.exit(1);
+    }
+
+    try {
+      await execAsync('git rev-parse --is-inside-work-tree');
+    } catch (e) {
+      step2.stop('❌', COLORS.red);
+      console.error(`${COLORS.red}${t.errNotGit}${COLORS.reset}`);
+      rl.close();
+      process.exit(1);
+    }
 
     step2.update(t.step2Staging);
     execSync('git add .');
@@ -298,7 +317,8 @@ ${diff}
       aiMsg = aiMsg.trim();
     } catch (e) {
       step4.stop('❌', COLORS.red);
-      console.error(`${COLORS.red}\nFailed to generate message.${COLORS.reset}`);
+      console.error(`\n${COLORS.red}${t.errNotAuthenticated}${COLORS.reset}`);
+      console.error(`${COLORS.red}${t.error} ${e.message}${COLORS.reset}`);
       rl.close();
       process.exit(1);
     }
