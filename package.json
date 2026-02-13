@@ -1,0 +1,25 @@
+{
+  "name": "@jinung41/gemini-commit-generator",
+  "version": "1.0.0",
+  "description": "AI-powered git commit message generator using Gemini CLI",
+  "main": "index.js",
+  "bin": {
+    "aic": "./index.js"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "keywords": [
+    "git",
+    "commit",
+    "ai",
+    "gemini",
+    "automation"
+  ],
+  "author": "JinUng41",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JinUng41/gemini-commit-generator.git"
+  }
+}
