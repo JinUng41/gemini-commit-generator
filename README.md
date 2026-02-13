@@ -2,6 +2,8 @@
 
 A universal, zero-config AI commit tool that learns your project's style and generates high-quality commit messages using the Google Gemini CLI.
 
+**English** | [한국어](./README.ko.md)
+
 ## ✨ Features
 - **Zero Config**: Automatically detects your project's language, format, and tone from `git history`.
 - **Context Aware**: Accepts optional user input to capture the "why" behind the code.
