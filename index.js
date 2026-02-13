@@ -28,15 +28,15 @@ const COLORS = {
 const STRINGS = {
   en: {
     starting: '\n🚀 Starting AI Commit Generator...',
-    checking: 'Checking environment and repository...',
-    staging: 'Staging changes and gathering data...',
+    step2: 'Step 2: Checking environment and repository...',
+    step2Staging: 'Step 2: Staging changes and gathering data...',
     noChanges: '✨ No changes staged. Please make some changes first.',
     summary: '\n📊 Change Summary:',
     filesAdded: 'new files',
     filesModified: 'modified files',
     filesDeleted: 'deleted files',
-    step2: '\n📝 Step 2: Provide context (Optional, press Enter to skip)',
-    step3: 'AI is analyzing changes and drafting message...',
+    step3: '\n📝 Step 3: Provide context (Optional, press Enter to skip)',
+    step4: 'Step 4: AI is analyzing changes and drafting message...',
     analysisDone: 'AI Analysis completed in',
     menuTitle: '\nWhat would you like to do?',
     menuCommit: '✅ Commit',
@@ -48,6 +48,7 @@ const STRINGS = {
     regenerating: '\n🔄 Regenerating...',
     successEdited: '\n🎉 Committed with edited message!',
     cancelled: '\nCommit cancelled.',
+    editAborted: '\nNo changes saved. Commit aborted.',
     invalid: 'Invalid selection.',
     error: '\nAn unexpected error occurred:',
     promptLang: 'English',
@@ -55,15 +56,15 @@ const STRINGS = {
   },
   ko: {
     starting: '\n🚀 AI 커밋 생성기를 시작합니다...',
-    checking: '환경 및 저장소 확인 중...',
-    staging: '변경 사항 스테이징 및 데이터 수집 중...',
+    step2: 'Step 2: 환경 및 저장소 확인 중...',
+    step2Staging: 'Step 2: 변경 사항 스테이징 및 데이터 수집 중...',
     noChanges: '✨ 스테이징된 변경 사항이 없습니다. 먼저 파일을 수정해주세요.',
     summary: '\n📊 변경 요약:',
     filesAdded: '개의 새 파일',
     filesModified: '개의 수정된 파일',
     filesDeleted: '개의 삭제된 파일',
-    step2: '\n📝 2단계: 추가 맥락 제공 (선택 사항, 건너뛰려면 Enter)',
-    step3: 'AI가 변경 사항을 분석하고 메시지를 작성 중입니다...',
+    step3: '\n📝 Step 3: 추가 맥락 제공 (선택 사항, 건너뛰려면 Enter)',
+    step4: 'Step 4: AI가 변경 사항을 분석하고 메시지를 작성 중입니다...',
     analysisDone: 'AI 분석 완료:',
     menuTitle: '\n어떻게 하시겠습니까?',
     menuCommit: '✅ 커밋하기',
@@ -75,6 +76,7 @@ const STRINGS = {
     regenerating: '\n🔄 다시 생성 중...',
     successEdited: '\n🎉 수정된 메시지로 커밋되었습니다!',
     cancelled: '\n커밋이 취소되었습니다.',
+    editAborted: '\n저장된 변경 사항이 없습니다. 커밋이 중단되었습니다.',
     invalid: '잘못된 선택입니다.',
     error: '\n예상치 못한 오류가 발생했습니다:',
     promptLang: 'KOREAN (한국어)',
@@ -150,18 +152,51 @@ async function getChangeSummary() {
 async function editInEditor(initialContent) {
   const tmpEditPath = path.join(os.tmpdir(), `gcg-edit-${Date.now()}.txt`);
   fs.writeFileSync(tmpEditPath, initialContent);
-
-  const editor = process.env.EDITOR || (os.platform() === 'win32' ? 'notepad' : 'vi');
   
+  const initialStat = fs.statSync(tmpEditPath);
+
+  const editorCommand = process.env.EDITOR || (os.platform() === 'win32' ? 'notepad' : 'vi');
+  
+  // Pause readline to give control to the editor
+  rl.pause();
+
   return new Promise((resolve) => {
-    const child = spawn(editor, [tmpEditPath], { stdio: 'inherit' });
+    // Use shell: true to handle editor commands with arguments (e.g., "code --wait")
+    const child = spawn(editorCommand, [tmpEditPath], { 
+      stdio: 'inherit',
+      shell: true 
+    });
     
     child.on('exit', () => {
+      // Resume readline after editor closes
+      rl.resume();
+      
+      const finalStat = fs.statSync(tmpEditPath);
       const editedContent = fs.readFileSync(tmpEditPath, 'utf8').trim();
+      
+      let result = null;
+      // Check if the file was actually saved (mtime changed) and is not empty
+      if (finalStat.mtimeMs > initialStat.mtimeMs && editedContent) {
+        result = editedContent;
+      }
+
       if (fs.existsSync(tmpEditPath)) fs.unlinkSync(tmpEditPath);
-      resolve(editedContent);
+      resolve(result);
     });
   });
+}
+
+/**
+ * Helper to commit using a message from a string, handling special characters safely
+ */
+async function commitWithMessage(message) {
+  const tmpMsgPath = path.join(os.tmpdir(), `gcg-msg-${Date.now()}.txt`);
+  fs.writeFileSync(tmpMsgPath, message);
+  try {
+    execSync(`git commit -F "${tmpMsgPath}"`);
+  } finally {
+    if (fs.existsSync(tmpMsgPath)) fs.unlinkSync(tmpMsgPath);
+  }
 }
 
 /**
@@ -171,17 +206,26 @@ async function run(selectedLang = null) {
   let lang = selectedLang;
   
   if (!lang) {
-    console.log(`${COLORS.cyan}\n🌐 Select Language / 언어 선택:${COLORS.reset}`);
-    console.log(`1) English`);
-    console.log(`2) 한국어`);
-    const langChoice = await question('Selection [1-2, default: 2] > ');
-    lang = (langChoice === '1') ? 'en' : 'ko';
+    while (true) {
+      console.log(`${COLORS.cyan}\n🌐 Step 1: Select Language / Step 1: 언어 선택${COLORS.reset}`);
+      console.log(`1) English`);
+      console.log(`2) 한국어`);
+      const langChoice = await question('Selection [1-2] > ');
+      if (langChoice === '1') {
+        lang = 'en';
+        break;
+      } else if (langChoice === '2') {
+        lang = 'ko';
+        break;
+      }
+      console.log(`${COLORS.red}Invalid selection. Please choose 1 or 2. / 잘못된 선택입니다. 1 또는 2를 선택해주세요.${COLORS.reset}`);
+    }
   }
   
   const t = STRINGS[lang];
   console.log(`${COLORS.magenta}${t.starting}${COLORS.reset}`);
   
-  const step1 = startSpinner(t.checking);
+  const step2 = startSpinner(t.step2);
   
   try {
     // 1. Validate Environment
@@ -190,7 +234,7 @@ async function run(selectedLang = null) {
       execAsync('git rev-parse --is-inside-work-tree').catch(() => { throw new Error('Not a git repository'); })
     ]);
 
-    step1.update(t.staging);
+    step2.update(t.step2Staging);
     execSync('git add .');
     
     const [summary, diffRaw, history] = await Promise.all([
@@ -200,13 +244,13 @@ async function run(selectedLang = null) {
     ]);
 
     if (summary.added === 0 && summary.modified === 0 && summary.deleted === 0) {
-      step1.stop('⚠', COLORS.yellow);
+      step2.stop('⚠', COLORS.yellow);
       console.log(`${COLORS.yellow}${t.noChanges}${COLORS.reset}`);
       rl.close();
       return;
     }
 
-    step1.stop();
+    step2.stop();
 
     // 2. Show Summary
     console.log(`${COLORS.magenta}${t.summary}${COLORS.reset}`);
@@ -220,12 +264,12 @@ async function run(selectedLang = null) {
     }
 
     // 3. User Context
-    console.log(`${COLORS.cyan}${t.step2}${COLORS.reset}`);
+    console.log(`${COLORS.cyan}${t.step3}${COLORS.reset}`);
     const userContext = await question('> ');
 
     // 4. AI Analysis
     console.log('');
-    const step3 = startSpinner(t.step3);
+    const step4 = startSpinner(t.step4);
     
     const prompt = `Generate a detailed git commit message in ${t.promptLang} based on the diff.
 Match the project style from recent history if possible.
@@ -253,15 +297,15 @@ ${diff}
       aiMsg = await execAsync('gemini -p - -m flash -e ""', prompt);
       aiMsg = aiMsg.trim();
     } catch (e) {
-      step3.stop('❌', COLORS.red);
+      step4.stop('❌', COLORS.red);
       console.error(`${COLORS.red}\nFailed to generate message.${COLORS.reset}`);
       rl.close();
       process.exit(1);
     }
     
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-    step3.update(`${t.analysisDone} ${duration}s`);
-    step3.stop();
+    step4.update(`${t.analysisDone} ${duration}s`);
+    step4.stop();
 
     console.log(`${COLORS.white}\n--------------------------------------------${COLORS.reset}`);
     console.log(`${COLORS.green}${aiMsg}${COLORS.reset}`);
@@ -279,8 +323,7 @@ ${diff}
 
       switch (choice) {
         case '1':
-          const escapedMsg = aiMsg.replace(/"/g, '\\"');
-          execSync(`git commit -m "${escapedMsg}"`);
+          await commitWithMessage(aiMsg);
           console.log(`${COLORS.green}${t.success}${COLORS.reset}`);
           rl.close();
           return;
@@ -290,11 +333,12 @@ ${diff}
         case '3':
           const editedMsg = await editInEditor(aiMsg);
           if (editedMsg) {
-            const escapedEditedMsg = editedMsg.replace(/"/g, '\\"');
-            execSync(`git commit -m "${escapedEditedMsg}"`);
+            await commitWithMessage(editedMsg);
             console.log(`${COLORS.green}${t.successEdited}${COLORS.reset}`);
             rl.close();
             return;
+          } else {
+            console.log(`${COLORS.yellow}${t.editAborted}${COLORS.reset}`);
           }
           break;
         case '4':
