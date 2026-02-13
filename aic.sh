@@ -25,11 +25,12 @@ update_aic() {
     if curl -sSL "$REPO_URL" -o "$TMP_FILE"; then
         # Check if the download was successful and not empty
         if [ -s "$TMP_FILE" ]; then
-            mv "$TMP_FILE" "$SCRIPT_PATH"
-            chmod +x "$SCRIPT_PATH"
-            echo -e "\n\033[1;32m🎉 Success! aic has been updated to the latest version.\033[0m"
-            echo -e "\033[1;34mCheck out the latest features at: https://github.com/JinUng41/gemini-commit-generator\033[0m"
-            exit 0
+            if mv "$TMP_FILE" "$SCRIPT_PATH" 2>/dev/null || sudo mv "$TMP_FILE" "$SCRIPT_PATH"; then
+                chmod +x "$SCRIPT_PATH"
+                echo -e "\n\033[1;32m🎉 Success! aic has been updated to the latest version.\033[0m"
+                echo -e "\033[1;34mCheck out the latest features at: https://github.com/JinUng41/gemini-commit-generator\033[0m"
+                exit 0
+            fi
         fi
     fi
     
@@ -48,13 +49,12 @@ uninstall_aic() {
     echo -e "\n\033[1;33m⚠️  Are you sure you want to uninstall aic? (y/N)\033[0m"
     read -p "> " confirm
     if [[ "$confirm" == [yY] || "$confirm" == [yY][eE][sS] ]]; then
-        rm "$SCRIPT_PATH"
-        if [ $? -eq 0 ]; then
+        if rm "$SCRIPT_PATH" 2>/dev/null || sudo rm "$SCRIPT_PATH"; then
             echo -e "\n\033[1;32m✅ Done! aic has been successfully removed from your system.\033[0m"
             echo -e "\033[1;34mThank you for using gemini-commit-generator!\033[0m"
             exit 0
         else
-            echo -e "\n\033[1;31m❌ Failed to uninstall. You might need sudo privileges.\033[0m"
+            echo -e "\n\033[1;31m❌ Failed to uninstall. Please try running: sudo aic --uninstall\033[0m"
         fi
     else
         echo -e "\n\033[1;34mUninstallation cancelled.\033[0m"
