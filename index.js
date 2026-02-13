@@ -22,6 +22,66 @@ const COLORS = {
   clearLine: '\x1b[K',
 };
 
+/**
+ * UI Text Resources
+ */
+const STRINGS = {
+  en: {
+    starting: '\n🚀 Starting AI Commit Generator...',
+    checking: 'Checking environment and repository...',
+    staging: 'Staging changes and gathering data...',
+    noChanges: '✨ No changes staged. Please make some changes first.',
+    summary: '\n📊 Change Summary:',
+    filesAdded: 'new files',
+    filesModified: 'modified files',
+    filesDeleted: 'deleted files',
+    step2: '\n📝 Step 2: Provide context (Optional, press Enter to skip)',
+    step3: 'AI is analyzing changes and drafting message...',
+    analysisDone: 'AI Analysis completed in',
+    menuTitle: '\nWhat would you like to do?',
+    menuCommit: '✅ Commit',
+    menuRegen: '🔄 Regenerate',
+    menuEdit: '✏️  Edit',
+    menuCancel: '❌ Cancel',
+    selection: 'Selection [1-4] > ',
+    success: '\n🎉 Successfully committed!',
+    regenerating: '\n🔄 Regenerating...',
+    successEdited: '\n🎉 Committed with edited message!',
+    cancelled: '\nCommit cancelled.',
+    invalid: 'Invalid selection.',
+    error: '\nAn unexpected error occurred:',
+    promptLang: 'English',
+    promptExample: '- index.js: Refactor AI prompt and optimize performance'
+  },
+  ko: {
+    starting: '\n🚀 AI 커밋 생성기를 시작합니다...',
+    checking: '환경 및 저장소 확인 중...',
+    staging: '변경 사항 스테이징 및 데이터 수집 중...',
+    noChanges: '✨ 스테이징된 변경 사항이 없습니다. 먼저 파일을 수정해주세요.',
+    summary: '\n📊 변경 요약:',
+    filesAdded: '개의 새 파일',
+    filesModified: '개의 수정된 파일',
+    filesDeleted: '개의 삭제된 파일',
+    step2: '\n📝 2단계: 추가 맥락 제공 (선택 사항, 건너뛰려면 Enter)',
+    step3: 'AI가 변경 사항을 분석하고 메시지를 작성 중입니다...',
+    analysisDone: 'AI 분석 완료:',
+    menuTitle: '\n어떻게 하시겠습니까?',
+    menuCommit: '✅ 커밋하기',
+    menuRegen: '🔄 다시 생성',
+    menuEdit: '✏️  수정하기',
+    menuCancel: '❌ 취소',
+    selection: '선택 [1-4] > ',
+    success: '\n🎉 성공적으로 커밋되었습니다!',
+    regenerating: '\n🔄 다시 생성 중...',
+    successEdited: '\n🎉 수정된 메시지로 커밋되었습니다!',
+    cancelled: '\n커밋이 취소되었습니다.',
+    invalid: '잘못된 선택입니다.',
+    error: '\n예상치 못한 오류가 발생했습니다:',
+    promptLang: 'KOREAN (한국어)',
+    promptExample: '- index.js: AI 프롬프트 수정 및 성능 최적화'
+  }
+};
+
 const rl = readline.createInterface({
   input: process.stdin,
   output: process.stdout
@@ -107,10 +167,21 @@ async function editInEditor(initialContent) {
 /**
  * Main Logic
  */
-async function run() {
-  console.log(`${COLORS.magenta}\n🚀 Starting AI Commit Generator...${COLORS.reset}`);
+async function run(selectedLang = null) {
+  let lang = selectedLang;
   
-  const step1 = startSpinner('Checking environment and repository...');
+  if (!lang) {
+    console.log(`${COLORS.cyan}\n🌐 Select Language / 언어 선택:${COLORS.reset}`);
+    console.log(`1) English`);
+    console.log(`2) 한국어`);
+    const langChoice = await question('Selection [1-2, default: 2] > ');
+    lang = (langChoice === '1') ? 'en' : 'ko';
+  }
+  
+  const t = STRINGS[lang];
+  console.log(`${COLORS.magenta}${t.starting}${COLORS.reset}`);
+  
+  const step1 = startSpinner(t.checking);
   
   try {
     // 1. Validate Environment
@@ -119,7 +190,7 @@ async function run() {
       execAsync('git rev-parse --is-inside-work-tree').catch(() => { throw new Error('Not a git repository'); })
     ]);
 
-    step1.update('Staging changes and gathering data...');
+    step1.update(t.staging);
     execSync('git add .');
     
     const [summary, diffRaw, history] = await Promise.all([
@@ -130,7 +201,7 @@ async function run() {
 
     if (summary.added === 0 && summary.modified === 0 && summary.deleted === 0) {
       step1.stop('⚠', COLORS.yellow);
-      console.log(`${COLORS.yellow}✨ No changes staged. Please make some changes first.${COLORS.reset}`);
+      console.log(`${COLORS.yellow}${t.noChanges}${COLORS.reset}`);
       rl.close();
       return;
     }
@@ -138,10 +209,10 @@ async function run() {
     step1.stop();
 
     // 2. Show Summary
-    console.log(`${COLORS.magenta}\n📊 Change Summary:${COLORS.reset}`);
-    if (summary.added > 0) console.log(`  ${COLORS.green}+ ${summary.added} new files${COLORS.reset}`);
-    if (summary.modified > 0) console.log(`  ${COLORS.yellow}~ ${summary.modified} modified files${COLORS.reset}`);
-    if (summary.deleted > 0) console.log(`  ${COLORS.red}- ${summary.deleted} deleted files${COLORS.reset}`);
+    console.log(`${COLORS.magenta}${t.summary}${COLORS.reset}`);
+    if (summary.added > 0) console.log(`  ${COLORS.green}+ ${summary.added} ${t.filesAdded}${COLORS.reset}`);
+    if (summary.modified > 0) console.log(`  ${COLORS.yellow}~ ${summary.modified} ${t.filesModified}${COLORS.reset}`);
+    if (summary.deleted > 0) console.log(`  ${COLORS.red}- ${summary.deleted} ${t.filesDeleted}${COLORS.reset}`);
 
     let diff = diffRaw;
     if (diff.length > 3000) {
@@ -149,14 +220,14 @@ async function run() {
     }
 
     // 3. User Context
-    console.log(`${COLORS.cyan}\n📝 Step 2: Provide context (Optional, press Enter to skip)${COLORS.reset}`);
+    console.log(`${COLORS.cyan}${t.step2}${COLORS.reset}`);
     const userContext = await question('> ');
 
     // 4. AI Analysis
     console.log('');
-    const step3 = startSpinner('AI is analyzing changes and drafting message...');
+    const step3 = startSpinner(t.step3);
     
-    const prompt = `Generate a detailed git commit message in KOREAN (한국어) based on the diff.
+    const prompt = `Generate a detailed git commit message in ${t.promptLang} based on the diff.
 Match the project style from recent history if possible.
 
 [STYLE HISTORY]
@@ -172,7 +243,7 @@ ${diff}
 1. TITLE: A concise summary (max 50 chars), starting with a type (feat, fix, refactor, style, docs, chore).
 2. BODY: Detailed explanation of changes. 
    - For each changed file, use ONLY the FILENAME (exclude directory paths) followed by a description of what changed.
-   - Example: "- index.js: AI 프롬프트 수정 및 성능 최적화"
+   - Example: "${t.promptExample}"
 3. Use a blank line between TITLE and BODY.
 4. Output ONLY the commit message without any markdown backticks or quotes.`;
 
@@ -189,7 +260,7 @@ ${diff}
     }
     
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-    step3.update(`AI Analysis completed in ${duration}s`);
+    step3.update(`${t.analysisDone} ${duration}s`);
     step3.stop();
 
     console.log(`${COLORS.white}\n--------------------------------------------${COLORS.reset}`);
@@ -198,46 +269,45 @@ ${diff}
 
     // 5. Interactive Selection
     while (true) {
-      console.log(`${COLORS.cyan}\nWhat would you like to do?${COLORS.reset}`);
-      console.log('1) ✅ Commit');
-      console.log('2) 🔄 Regenerate');
-      console.log('3) ✏️  Edit');
-      console.log('4) ❌ Cancel');
+      console.log(`${COLORS.cyan}${t.menuTitle}${COLORS.reset}`);
+      console.log(`1) ${t.menuCommit}`);
+      console.log(`2) ${t.menuRegen}`);
+      console.log(`3) ${t.menuEdit}`);
+      console.log(`4) ${t.menuCancel}`);
       
-      const choice = await question('Selection [1-4] > ');
+      const choice = await question(t.selection);
 
       switch (choice) {
         case '1':
           const escapedMsg = aiMsg.replace(/"/g, '\\"');
           execSync(`git commit -m "${escapedMsg}"`);
-          console.log(`${COLORS.green}\n🎉 Successfully committed!${COLORS.reset}`);
+          console.log(`${COLORS.green}${t.success}${COLORS.reset}`);
           rl.close();
           return;
         case '2':
-          console.log(`${COLORS.yellow}\n🔄 Regenerating...${COLORS.reset}`);
-          rl.close(); // Close current interface before recursion
-          return run(); 
+          console.log(`${COLORS.yellow}${t.regenerating}${COLORS.reset}`);
+          return run(lang); 
         case '3':
           const editedMsg = await editInEditor(aiMsg);
           if (editedMsg) {
             const escapedEditedMsg = editedMsg.replace(/"/g, '\\"');
             execSync(`git commit -m "${escapedEditedMsg}"`);
-            console.log(`${COLORS.green}\n🎉 Committed with edited message!${COLORS.reset}`);
+            console.log(`${COLORS.green}${t.successEdited}${COLORS.reset}`);
             rl.close();
             return;
           }
           break;
         case '4':
-          console.log(`${COLORS.red}\nCommit cancelled.${COLORS.reset}`);
+          console.log(`${COLORS.red}${t.cancelled}${COLORS.reset}`);
           rl.close();
           return;
         default:
-          console.log(`${COLORS.red}Invalid selection.${COLORS.reset}`);
+          console.log(`${COLORS.red}${t.invalid}${COLORS.reset}`);
       }
     }
 
   } catch (error) {
-    console.error(`${COLORS.red}\nAn unexpected error occurred:${COLORS.reset}`, error.message);
+    console.error(`${COLORS.red}${t.error}${COLORS.reset}`, error.message);
     rl.close();
     process.exit(1);
   }

@@ -5,7 +5,9 @@ A cross-platform, zero-config AI commit tool that learns your project's style an
 **English** | [한국어](./README.ko.md)
 
 ## ✨ Features
+- **Multi-language Support**: Select between English and Korean at startup.
 - **Cross-Platform**: Works seamlessly on macOS, Linux, and Windows via Node.js.
+- **Auto Staging**: Automatically stages all changes (`git add .`) on execution.
 - **Zero Config**: Automatically detects your project's language and format from `git history`.
 - **Context Aware**: Captures the "why" from optional user input.
 - **Interactive**: Review, regenerate, or edit messages before committing.
@@ -14,7 +16,7 @@ A cross-platform, zero-config AI commit tool that learns your project's style an
 
 ### Prerequisites
 1. [Node.js](https://nodejs.org/) (v14 or higher)
-2. [Gemini CLI](https://github.com/google/gemini-cli)
+2. [Gemini CLI](https://github.com/google/gemini-cli) must be installed and accessible via the `gemini` command.
 
 ### Install via npm (Global)
 ```bash
@@ -26,6 +28,10 @@ Just type `gcg` in any git repository:
 ```bash
 gcg
 ```
+1. **Select Language**: Choose English (1) or Korean (2).
+2. **Review Summary**: Check the summary of staged changes.
+3. **Provide Context**: (Optional) Enter extra info for the AI.
+4. **Choose Action**: Review the generated message and choose to Commit, Regenerate, Edit, or Cancel.
 
 ## 🔄 Updating
 ```bash
