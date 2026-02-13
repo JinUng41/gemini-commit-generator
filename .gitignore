@@ -1,0 +1,10 @@
+# Project History
+DEVELOPMENT_LOG.ko.md
+
+# System Files
+.DS_Store
+Thumbs.db
+
+# Temporary Files
+*.tmp
+*.log
