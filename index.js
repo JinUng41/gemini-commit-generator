@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const { execSync } = require('child_process');
+const { execSync, exec, spawn } = require('child_process');
 const readline = require('readline');
 const fs = require('fs');
 const path = require('path');
@@ -12,6 +12,64 @@ const rl = readline.createInterface({
 });
 
 const question = (query) => new Promise((resolve) => rl.question(query, resolve));
+
+// Helper for asynchronous shell commands
+const execPromise = (command) => new Promise((resolve, reject) => {
+  exec(command, (error, stdout, stderr) => {
+    if (error) reject(error);
+    else resolve(stdout);
+  });
+});
+
+// Loading spinner function
+function startSpinner(message) {
+  const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+  let i = 0;
+  const interval = setInterval(() => {
+    process.stdout.write(`\r\x1b[36m${frames[i]} ${message}\x1b[0m`);
+    i = (i + 1) % frames.length;
+  }, 80);
+
+  return () => {
+    clearInterval(interval);
+    process.stdout.write('\r\x1b[K'); // Clear the line
+  };
+}
+
+// Function to get change summary
+function getChangeSummary() {
+  const status = execSync('git status --porcelain').toString();
+  const lines = status.split('\n').filter(line => line.trim());
+  
+  let added = 0, modified = 0, deleted = 0;
+  
+  lines.forEach(line => {
+    const s = line.substring(0, 2);
+    if (s.includes('?') || s.includes('A')) added++;
+    else if (s.includes('M')) modified++;
+    else if (s.includes('D')) deleted++;
+  });
+
+  return { added, modified, deleted };
+}
+
+// Function to edit message in system editor
+async function editInEditor(initialContent) {
+  const tmpEditPath = path.join(os.tmpdir(), `gcg-edit-${Date.now()}.txt`);
+  fs.writeFileSync(tmpEditPath, initialContent);
+
+  const editor = process.env.EDITOR || (os.platform() === 'win32' ? 'notepad' : 'vi');
+  
+  return new Promise((resolve) => {
+    const child = spawn(editor, [tmpEditPath], { stdio: 'inherit' });
+    
+    child.on('exit', () => {
+      const editedContent = fs.readFileSync(tmpEditPath, 'utf8').trim();
+      if (fs.existsSync(tmpEditPath)) fs.unlinkSync(tmpEditPath);
+      resolve(editedContent);
+    });
+  });
+}
 
 async function run() {
   const tmpFilePath = path.join(os.tmpdir(), `gcg-prompt-${Date.now()}.txt`);
@@ -35,12 +93,20 @@ async function run() {
 
     // 3. Stage changes and get diff
     execSync('git add .');
-    let diff = execSync('git diff --cached -- . ":(exclude)*.lock" ":(exclude)package-lock.json"').toString();
-
-    if (!diff.trim()) {
+    
+    // Show change summary
+    const summary = getChangeSummary();
+    if (summary.added === 0 && summary.modified === 0 && summary.deleted === 0) {
       console.log('\x1b[33m✨ No changes staged. Please make some changes first.\x1b[0m');
       process.exit(0);
     }
+
+    console.log('\n\x1b[35m📊 Change Summary:\x1b[0m');
+    if (summary.added > 0) console.log(`  \x1b[32m+ ${summary.added} new files\x1b[0m`);
+    if (summary.modified > 0) console.log(`  \x1b[33m~ ${summary.modified} modified files\x1b[0m`);
+    if (summary.deleted > 0) console.log(`  \x1b[31m- ${summary.deleted} deleted files\x1b[0m`);
+
+    let diff = execSync('git diff --cached -- . ":(exclude)*.lock" ":(exclude)package-lock.json"').toString();
 
     // Performance: Truncate diff to 3000 chars
     if (diff.length > 3000) {
@@ -55,9 +121,8 @@ async function run() {
     const userContext = await question('> ');
 
     // 6. Construct Prompt
-    const prompt = `Generate a concise, ONE-LINE commit message in KOREAN (한국어). 
-Match the project style from recent history. 
-Output ONLY the message.
+    const prompt = `Generate a detailed git commit message in KOREAN (한국어) based on the diff.
+Match the project style from recent history if possible.
 
 [STYLE HISTORY]
 ${history}
@@ -66,32 +131,36 @@ ${history}
 ${userContext || 'None'}
 
 [DIFF]
-${diff}`;
+${diff}
+
+[FORMAT]
+1. TITLE: A concise summary (max 50 chars), starting with a type (feat, fix, refactor, style, docs, chore).
+2. BODY: Detailed explanation of changes. List important changes by file or logical group.
+3. Use a blank line between TITLE and BODY.
+4. Output ONLY the commit message without any markdown backticks or quotes.`;
 
     async function generateAndSelect() {
-      console.log('\n\x1b[33m🤖 AI is analyzing style and generating message...\x1b[0m');
-      
       fs.writeFileSync(tmpFilePath, prompt);
 
+      const stopSpinner = startSpinner('AI is analyzing changes and generating a detailed message...');
+      
       const startTime = Date.now();
       let aiMsg;
       try {
-        // OPTIMIZED COMMAND:
-        // -p: non-interactive
-        // -m flash: fastest model
-        // -e "": skip all extensions (IDE sync, hooks, etc.) for speed
-        aiMsg = execSync(`gemini -p "$(cat "${tmpFilePath}")" -m flash -e ""`, {
-          encoding: 'utf8'
-        }).trim();
+        const rawOutput = await execPromise(`gemini -p "$(cat "${tmpFilePath}")" -m flash -e ""`);
+        aiMsg = rawOutput.trim();
       } catch (e) {
-        console.error('\x1b[31m❌ Failed to generate message.\x1b[0m');
+        stopSpinner();
+        console.error('\x1b[31m\n❌ Failed to generate message.\x1b[0m');
         return;
       }
+      
+      stopSpinner();
       const duration = ((Date.now() - startTime) / 1000).toFixed(2);
 
-      console.log(`\x1b[37m(Analysis completed in ${duration}s)\x1b[0m`);
+      console.log(`\r\x1b[32m✔ Analysis completed in ${duration}s\x1b[0m`);
       console.log('\x1b[37m\n--------------------------------------------\x1b[0m');
-      console.log(`Proposed Message: \x1b[32m${aiMsg}\x1b[0m`);
+      console.log(`\x1b[32m${aiMsg}\x1b[0m`);
       console.log('\x1b[37m--------------------------------------------\x1b[0m');
 
       while (true) {
@@ -107,16 +176,16 @@ ${diff}`;
           case '1':
             const escapedMsg = aiMsg.replace(/"/g, '\\"');
             execSync(`git commit -m "${escapedMsg}"`);
-            console.log('\x1b[32m\n🎉 Successfully committed!\x1b[0m');
+            console.log('\x1b[32m\n🎉 Successfully committed with detailed message!\x1b[0m');
             cleanupAndExit(0);
           case '2':
             return generateAndSelect();
           case '3':
-            const editedMsg = await question('\nEnter custom message: ');
+            const editedMsg = await editInEditor(aiMsg);
             if (editedMsg) {
               const escapedEditedMsg = editedMsg.replace(/"/g, '\\"');
               execSync(`git commit -m "${escapedEditedMsg}"`);
-              console.log('\x1b[32m\n🎉 Committed with custom message!\x1b[0m');
+              console.log('\x1b[32m\n🎉 Committed with edited message!\x1b[0m');
               cleanupAndExit(0);
             }
             break;
