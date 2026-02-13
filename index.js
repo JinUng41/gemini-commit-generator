@@ -29,17 +29,23 @@ async function run() {
       process.exit(1);
     }
 
-    // 3. Stage changes and check for diff
+    // 3. Stage changes and check for diff (Optimized: Exclude heavy lock files)
     execSync('git add .');
-    const diff = execSync('git diff --cached').toString();
+    let diff = execSync('git diff --cached -- . ":(exclude)*.lock" ":(exclude)package-lock.json"').toString();
 
     if (!diff.trim()) {
-      console.log('\x1b[33m✨ No changes staged. Please make some changes first.\x1b[0m');
+      console.log('\x1b[33m✨ No changes staged (excluding lock files). Please make some changes first.\x1b[0m');
       process.exit(0);
     }
 
-    // 4. Analyze project style (Optimized: only last 10 subjects)
-    const history = execSync('git log -n 10 --pretty=format:"%s"').toString();
+    // Performance Optimization: Truncate large diffs to reduce tokens and latency
+    const MAX_DIFF_LENGTH = 4000; 
+    if (diff.length > MAX_DIFF_LENGTH) {
+      diff = diff.substring(0, MAX_DIFF_LENGTH) + '\n\n...(diff truncated for performance)';
+    }
+
+    // 4. Analyze project style (Optimized: only last 3 subjects for maximum speed)
+    const history = execSync('git log -n 3 --pretty=format:"%s"').toString();
 
     // 5. Get user context
     console.log('\n\x1b[36m📝 Any specific context for this commit? (Optional, press Enter to skip)\x1b[0m');
@@ -69,7 +75,8 @@ ${diff}`;
       try {
         // Escape double quotes for shell command
         const escapedPrompt = prompt.replace(/"/g, '\\"');
-        aiMsg = execSync(`gemini "${escapedPrompt}"`).toString().trim();
+        // Use -p for headless mode and -m for the fast flash model
+        aiMsg = execSync(`gemini -p "${escapedPrompt}" -m flash`).toString().trim();
       } catch (e) {
         console.error('\x1b[31m❌ Failed to generate message.\x1b[0m');
         return;
