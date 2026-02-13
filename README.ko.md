@@ -35,12 +35,12 @@ gcg
 
 ## 🔄 업데이트
 ```bash
-npm update -g @jinung41/gemini-commit-generator
+npm update -g @devjinung41/gemini-commit-generator
 ```
 
 ## 🗑️ 삭제
 ```bash
-npm uninstall -g @jinung41/gemini-commit-generator
+npm uninstall -g @devjinung41/gemini-commit-generator
 ```
 
 ## 📄 라이선스

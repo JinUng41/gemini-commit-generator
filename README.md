@@ -35,12 +35,12 @@ gcg
 
 ## 🔄 Updating
 ```bash
-npm update -g @jinung41/gemini-commit-generator
+npm update -g @devjinung41/gemini-commit-generator
 ```
 
 ## 🗑️ Uninstallation
 ```bash
-npm uninstall -g @jinung41/gemini-commit-generator
+npm uninstall -g @devjinung41/gemini-commit-generator
 ```
 
 ## 📄 License
