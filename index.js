@@ -38,8 +38,8 @@ async function run() {
       process.exit(0);
     }
 
-    // 4. Analyze project style
-    const history = execSync('git log -n 15 --pretty=format:"%s"').toString();
+    // 4. Analyze project style (Optimized: only last 10 subjects)
+    const history = execSync('git log -n 10 --pretty=format:"%s"').toString();
 
     // 5. Get user context
     console.log('\n\x1b[36m📝 Any specific context for this commit? (Optional, press Enter to skip)\x1b[0m');
@@ -64,6 +64,7 @@ ${diff}`;
     async function generateAndSelect() {
       console.log('\n\x1b[33m🤖 AI is analyzing project style and generating message...\x1b[0m');
       
+      const startTime = Date.now();
       let aiMsg;
       try {
         // Escape double quotes for shell command
@@ -73,7 +74,9 @@ ${diff}`;
         console.error('\x1b[31m❌ Failed to generate message.\x1b[0m');
         return;
       }
+      const duration = ((Date.now() - startTime) / 1000).toFixed(2);
 
+      console.log(`\x1b[37m(Analysis completed in ${duration}s)\x1b[0m`);
       console.log('\x1b[37m\n--------------------------------------------\x1b[0m');
       console.log(`Proposed Message: \x1b[32m${aiMsg}\x1b[0m`);
       console.log('\x1b[37m--------------------------------------------\x1b[0m');
