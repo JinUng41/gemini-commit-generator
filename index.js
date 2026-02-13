@@ -42,8 +42,7 @@ async function run() {
     const history = execSync('git log -n 15 --pretty=format:"%s"').toString();
 
     // 5. Get user context
-    console.log('\x1b[36m
-📝 Any specific context for this commit? (Optional, press Enter to skip)\x1b[0m');
+    console.log('\n\x1b[36m📝 Any specific context for this commit? (Optional, press Enter to skip)\x1b[0m');
     const userContext = await question('> ');
 
     // 6. Construct Prompt
@@ -63,25 +62,24 @@ ${history}
 ${diff}`;
 
     async function generateAndSelect() {
-      console.log('\x1b[33m
-🤖 AI is analyzing project style and generating message...\x1b[0m');
+      console.log('\n\x1b[33m🤖 AI is analyzing project style and generating message...\x1b[0m');
       
       let aiMsg;
       try {
-        aiMsg = execSync(`gemini "${prompt.replace(/"/g, '"')}"`).toString().trim();
+        // Escape double quotes for shell command
+        const escapedPrompt = prompt.replace(/"/g, '\\"');
+        aiMsg = execSync(`gemini "${escapedPrompt}"`).toString().trim();
       } catch (e) {
         console.error('\x1b[31m❌ Failed to generate message.\x1b[0m');
         return;
       }
 
-      console.log('\x1b[37m
---------------------------------------------\x1b[0m');
-      console.log(`Proposed Message: \x1b[32m${aiMsg}\x1b[32m\x1b[0m`);
+      console.log('\x1b[37m\n--------------------------------------------\x1b[0m');
+      console.log(`Proposed Message: \x1b[32m${aiMsg}\x1b[0m`);
       console.log('\x1b[37m--------------------------------------------\x1b[0m');
 
       while (true) {
-        console.log('\x1b[36m
-What would you like to do?\x1b[0m');
+        console.log('\x1b[36m\nWhat would you like to do?\x1b[0m');
         console.log('1) ✅ Commit (Accept this message)');
         console.log('2) 🔄 Regenerate (Try another version)');
         console.log('3) ✏️  Edit (Modify and commit)');
@@ -91,25 +89,23 @@ What would you like to do?\x1b[0m');
 
         switch (choice) {
           case '1':
-            execSync(`git commit -m "${aiMsg.replace(/"/g, '"')}"`);
-            console.log('\x1b[32m
-🎉 Successfully committed!\x1b[0m');
+            const escapedMsg = aiMsg.replace(/"/g, '\\"');
+            execSync(`git commit -m "${escapedMsg}"`);
+            console.log('\x1b[32m\n🎉 Successfully committed!\x1b[0m');
             process.exit(0);
           case '2':
             return generateAndSelect();
           case '3':
-            const editedMsg = await question('
-Enter custom message: ');
+            const editedMsg = await question('\nEnter custom message: ');
             if (editedMsg) {
-              execSync(`git commit -m "${editedMsg.replace(/"/g, '"')}"`);
-              console.log('\x1b[32m
-🎉 Committed with custom message!\x1b[0m');
+              const escapedEditedMsg = editedMsg.replace(/"/g, '\\"');
+              execSync(`git commit -m "${escapedEditedMsg}"`);
+              console.log('\x1b[32m\n🎉 Committed with custom message!\x1b[0m');
               process.exit(0);
             }
             break;
           case '4':
-            console.log('\x1b[31m
-Commit cancelled.\x1b[0m');
+            console.log('\x1b[31m\nCommit cancelled.\x1b[0m');
             process.exit(0);
           default:
             console.log('\x1b[31mInvalid selection.\x1b[0m');
@@ -120,8 +116,7 @@ Commit cancelled.\x1b[0m');
     await generateAndSelect();
 
   } catch (error) {
-    console.error('\x1b[31m
-An unexpected error occurred:\x1b[0m', error.message);
+    console.error('\x1b[31m\nAn unexpected error occurred:\x1b[0m', error.message);
     process.exit(1);
   }
 }
