@@ -13,9 +13,21 @@ const rl = readline.createInterface({
 
 const question = (query) => new Promise((resolve) => rl.question(query, resolve));
 
-// Helper for asynchronous shell commands
+// Helper for asynchronous shell commands with stdin support
+const execWithStdin = (command, input) => new Promise((resolve, reject) => {
+  const child = exec(command, (error, stdout) => {
+    if (error) reject(error);
+    else resolve(stdout);
+  });
+  if (input) {
+    child.stdin.write(input);
+    child.stdin.end();
+  }
+});
+
+// Basic async exec helper
 const execPromise = (command) => new Promise((resolve, reject) => {
-  exec(command, (error, stdout, stderr) => {
+  exec(command, (error, stdout) => {
     if (error) reject(error);
     else resolve(stdout);
   });
@@ -36,13 +48,12 @@ function startSpinner(message) {
   };
 }
 
-// Function to get change summary
-function getChangeSummary() {
-  const status = execSync('git status --porcelain').toString();
+// Async change summary
+async function getChangeSummaryAsync() {
+  const status = await execPromise('git status --porcelain');
   const lines = status.split('\n').filter(line => line.trim());
   
   let added = 0, modified = 0, deleted = 0;
-  
   lines.forEach(line => {
     const s = line.substring(0, 2);
     if (s.includes('?') || s.includes('A')) added++;
@@ -72,30 +83,23 @@ async function editInEditor(initialContent) {
 }
 
 async function run() {
-  const tmpFilePath = path.join(os.tmpdir(), `gcg-prompt-${Date.now()}.txt`);
-
   try {
-    // 1. Check for required tools
-    try {
-      execSync('gemini --version', { stdio: 'ignore' });
-    } catch (e) {
-      console.error('\x1b[31m❌ Error: "gemini" CLI is not installed.\x1b[0m');
-      process.exit(1);
-    }
+    // 1. Parallel environment check
+    await Promise.all([
+      execPromise('gemini --version').catch(() => { throw new Error('gemini CLI not installed'); }),
+      execPromise('git rev-parse --is-inside-work-tree').catch(() => { throw new Error('Not a git repository'); })
+    ]);
 
-    // 2. Check for git repository
-    try {
-      execSync('git rev-parse --is-inside-work-tree', { stdio: 'ignore' });
-    } catch (e) {
-      console.error('\x1b[31m❌ Error: Not a git repository.\x1b[0m');
-      process.exit(1);
-    }
-
-    // 3. Stage changes and get diff
+    // 2. Stage changes
     execSync('git add .');
     
-    // Show change summary
-    const summary = getChangeSummary();
+    // 3. Parallel data gathering
+    const [summary, diffRaw, history] = await Promise.all([
+      getChangeSummaryAsync(),
+      execPromise('git diff --cached -- . ":(exclude)*.lock" ":(exclude)package-lock.json"'),
+      execPromise('git log -n 3 --pretty=format:"%s"')
+    ]);
+
     if (summary.added === 0 && summary.modified === 0 && summary.deleted === 0) {
       console.log('\x1b[33m✨ No changes staged. Please make some changes first.\x1b[0m');
       process.exit(0);
@@ -106,21 +110,16 @@ async function run() {
     if (summary.modified > 0) console.log(`  \x1b[33m~ ${summary.modified} modified files\x1b[0m`);
     if (summary.deleted > 0) console.log(`  \x1b[31m- ${summary.deleted} deleted files\x1b[0m`);
 
-    let diff = execSync('git diff --cached -- . ":(exclude)*.lock" ":(exclude)package-lock.json"').toString();
-
-    // Performance: Truncate diff to 3000 chars
+    let diff = diffRaw;
     if (diff.length > 3000) {
       diff = diff.substring(0, 3000) + '\n\n...(diff truncated for performance)';
     }
 
-    // 4. Analyze project style
-    const history = execSync('git log -n 3 --pretty=format:"%s"').toString();
-
-    // 5. Get user context
+    // 4. Get user context
     console.log('\n\x1b[36m📝 Any specific context for this commit? (Optional, press Enter to skip)\x1b[0m');
     const userContext = await question('> ');
 
-    // 6. Construct Prompt
+    // 5. Construct Prompt
     const prompt = `Generate a detailed git commit message in KOREAN (한국어) based on the diff.
 Match the project style from recent history if possible.
 
@@ -135,20 +134,21 @@ ${diff}
 
 [FORMAT]
 1. TITLE: A concise summary (max 50 chars), starting with a type (feat, fix, refactor, style, docs, chore).
-2. BODY: Detailed explanation of changes. List important changes by file or logical group.
+2. BODY: Detailed explanation of changes. 
+   - For each changed file, use ONLY the FILENAME (exclude directory paths) followed by a description of what changed.
+   - Example: "index.js: AI 프롬프트 수정 및 성능 최적화"
 3. Use a blank line between TITLE and BODY.
 4. Output ONLY the commit message without any markdown backticks or quotes.`;
 
     async function generateAndSelect() {
-      fs.writeFileSync(tmpFilePath, prompt);
-
       const stopSpinner = startSpinner('AI is analyzing changes and generating a detailed message...');
       
       const startTime = Date.now();
       let aiMsg;
       try {
-        const rawOutput = await execPromise(`gemini -p "$(cat "${tmpFilePath}")" -m flash -e ""`);
-        aiMsg = rawOutput.trim();
+        // Optimization: Use stdin instead of temp file
+        aiMsg = await execWithStdin('gemini -p - -m flash -e ""', prompt);
+        aiMsg = aiMsg.trim();
       } catch (e) {
         stopSpinner();
         console.error('\x1b[31m\n❌ Failed to generate message.\x1b[0m');
@@ -177,7 +177,7 @@ ${diff}
             const escapedMsg = aiMsg.replace(/"/g, '\\"');
             execSync(`git commit -m "${escapedMsg}"`);
             console.log('\x1b[32m\n🎉 Successfully committed with detailed message!\x1b[0m');
-            cleanupAndExit(0);
+            process.exit(0);
           case '2':
             return generateAndSelect();
           case '3':
@@ -186,27 +186,21 @@ ${diff}
               const escapedEditedMsg = editedMsg.replace(/"/g, '\\"');
               execSync(`git commit -m "${escapedEditedMsg}"`);
               console.log('\x1b[32m\n🎉 Committed with edited message!\x1b[0m');
-              cleanupAndExit(0);
+              process.exit(0);
             }
             break;
           case '4':
             console.log('\x1b[31m\nCommit cancelled.\x1b[0m');
-            cleanupAndExit(0);
+            process.exit(0);
           default:
             console.log('\x1b[31mInvalid selection.\x1b[0m');
         }
       }
     }
 
-    function cleanupAndExit(code) {
-      if (fs.existsSync(tmpFilePath)) fs.unlinkSync(tmpFilePath);
-      process.exit(code);
-    }
-
     await generateAndSelect();
 
   } catch (error) {
-    if (fs.existsSync(tmpFilePath)) fs.unlinkSync(tmpFilePath);
     console.error('\x1b[31m\nAn unexpected error occurred:\x1b[0m', error.message);
     process.exit(1);
   }
