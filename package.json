@@ -4,7 +4,7 @@
   "description": "AI-powered git commit message generator using Gemini CLI",
   "main": "index.js",
   "bin": {
-    "gcg": "./index.js"
+    "gcg": "index.js"
   },
   "engines": {
     "node": ">=14.0.0"
@@ -20,6 +20,6 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/JinUng41/gemini-commit-generator.git"
+    "url": "git+https://github.com/JinUng41/gemini-commit-generator.git"
   }
 }

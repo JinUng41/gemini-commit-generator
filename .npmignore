@@ -1,0 +1,13 @@
+# Development Files
+DEVELOPMENT_LOG.md
+.gitignore
+.gemini/
+
+# System Files
+.DS_Store
+Thumbs.db
+
+# Logs and Temporary Files
+*.log
+*.tmp
+/Users/kimjw/.gemini/tmp/
