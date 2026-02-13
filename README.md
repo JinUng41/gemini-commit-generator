@@ -18,7 +18,7 @@ You need the [Gemini CLI](https://github.com/google/gemini-cli) installed and co
 ### Quick Install (macOS/Linux)
 Run the following command in your terminal:
 ```bash
-curl -sSL https://raw.githubusercontent.com/JinUng41/gemini-commit-generator/main/aic.sh -o /usr/local/bin/aic && chmod +x /usr/local/bin/aic && echo -e "\n\033[1;32m🎉 aic installed successfully! Type 'aic' to start.\033[0m"
+curl -sSL https://raw.githubusercontent.com/JinUng41/gemini-commit-generator/main/aic.sh -o aic && chmod +x aic && sudo mv aic /usr/local/bin/aic && echo -e "\n\033[1;32m🎉 aic installed successfully! Type 'aic' to start.\033[0m"
 ```
 
 ## 💡 Usage
