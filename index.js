@@ -2,6 +2,9 @@
 
 const { execSync } = require('child_process');
 const readline = require('readline');
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -11,13 +14,14 @@ const rl = readline.createInterface({
 const question = (query) => new Promise((resolve) => rl.question(query, resolve));
 
 async function run() {
+  const tmpFilePath = path.join(os.tmpdir(), `gcg-prompt-${Date.now()}.txt`);
+
   try {
     // 1. Check for required tools
     try {
       execSync('gemini --version', { stdio: 'ignore' });
     } catch (e) {
       console.error('\x1b[31m❌ Error: "gemini" CLI is not installed.\x1b[0m');
-      console.log('Please install it first: https://github.com/google/gemini-cli');
       process.exit(1);
     }
 
@@ -29,22 +33,21 @@ async function run() {
       process.exit(1);
     }
 
-    // 3. Stage changes and check for diff (Optimized: Exclude heavy lock files)
+    // 3. Stage changes and get diff
     execSync('git add .');
     let diff = execSync('git diff --cached -- . ":(exclude)*.lock" ":(exclude)package-lock.json"').toString();
 
     if (!diff.trim()) {
-      console.log('\x1b[33m✨ No changes staged (excluding lock files). Please make some changes first.\x1b[0m');
+      console.log('\x1b[33m✨ No changes staged. Please make some changes first.\x1b[0m');
       process.exit(0);
     }
 
-    // Performance Optimization: Truncate large diffs to reduce tokens and latency
-    const MAX_DIFF_LENGTH = 4000; 
-    if (diff.length > MAX_DIFF_LENGTH) {
-      diff = diff.substring(0, MAX_DIFF_LENGTH) + '\n\n...(diff truncated for performance)';
+    // Performance: Truncate diff to 3000 chars
+    if (diff.length > 3000) {
+      diff = diff.substring(0, 3000) + '\n\n...(diff truncated for performance)';
     }
 
-    // 4. Analyze project style (Optimized: only last 3 subjects for maximum speed)
+    // 4. Analyze project style
     const history = execSync('git log -n 3 --pretty=format:"%s"').toString();
 
     // 5. Get user context
@@ -52,31 +55,34 @@ async function run() {
     const userContext = await question('> ');
 
     // 6. Construct Prompt
-    const prompt = `You are an expert software engineer. Generate a concise, high-quality commit message based on the provided diff.
+    const prompt = `Generate a concise, ONE-LINE commit message in KOREAN (한국어). 
+Match the project style from recent history. 
+Output ONLY the message.
 
-[CRITICAL RULES]
-1. STYLE MATCHING: Analyze the 'Recent Commit History' and strictly follow its language, format, and tone.
-2. ONE LINE: Output ONLY the commit message itself in a single line.
-3. ACCURACY: Focus on the 'why' and 'what' of the changes.
-
-[Context]
-- User's Intent: ${userContext || 'Analyze the diff and generate the most appropriate message.'}
-- Recent Commit History:
+[STYLE HISTORY]
 ${history}
 
-[Code Changes (diff)]
+[USER CONTEXT]
+${userContext || 'None'}
+
+[DIFF]
 ${diff}`;
 
     async function generateAndSelect() {
-      console.log('\n\x1b[33m🤖 AI is analyzing project style and generating message...\x1b[0m');
+      console.log('\n\x1b[33m🤖 AI is analyzing style and generating message...\x1b[0m');
       
+      fs.writeFileSync(tmpFilePath, prompt);
+
       const startTime = Date.now();
       let aiMsg;
       try {
-        // Escape double quotes for shell command
-        const escapedPrompt = prompt.replace(/"/g, '\\"');
-        // Use -p for headless mode and -m for the fast flash model
-        aiMsg = execSync(`gemini -p "${escapedPrompt}" -m flash`).toString().trim();
+        // OPTIMIZED COMMAND:
+        // -p: non-interactive
+        // -m flash: fastest model
+        // -e "": skip all extensions (IDE sync, hooks, etc.) for speed
+        aiMsg = execSync(`gemini -p "$(cat "${tmpFilePath}")" -m flash -e ""`, {
+          encoding: 'utf8'
+        }).trim();
       } catch (e) {
         console.error('\x1b[31m❌ Failed to generate message.\x1b[0m');
         return;
@@ -90,9 +96,9 @@ ${diff}`;
 
       while (true) {
         console.log('\x1b[36m\nWhat would you like to do?\x1b[0m');
-        console.log('1) ✅ Commit (Accept this message)');
-        console.log('2) 🔄 Regenerate (Try another version)');
-        console.log('3) ✏️  Edit (Modify and commit)');
+        console.log('1) ✅ Commit');
+        console.log('2) 🔄 Regenerate');
+        console.log('3) ✏️  Edit');
         console.log('4) ❌ Cancel');
         
         const choice = await question('Selection [1-4] > ');
@@ -102,7 +108,7 @@ ${diff}`;
             const escapedMsg = aiMsg.replace(/"/g, '\\"');
             execSync(`git commit -m "${escapedMsg}"`);
             console.log('\x1b[32m\n🎉 Successfully committed!\x1b[0m');
-            process.exit(0);
+            cleanupAndExit(0);
           case '2':
             return generateAndSelect();
           case '3':
@@ -111,21 +117,27 @@ ${diff}`;
               const escapedEditedMsg = editedMsg.replace(/"/g, '\\"');
               execSync(`git commit -m "${escapedEditedMsg}"`);
               console.log('\x1b[32m\n🎉 Committed with custom message!\x1b[0m');
-              process.exit(0);
+              cleanupAndExit(0);
             }
             break;
           case '4':
             console.log('\x1b[31m\nCommit cancelled.\x1b[0m');
-            process.exit(0);
+            cleanupAndExit(0);
           default:
             console.log('\x1b[31mInvalid selection.\x1b[0m');
         }
       }
     }
 
+    function cleanupAndExit(code) {
+      if (fs.existsSync(tmpFilePath)) fs.unlinkSync(tmpFilePath);
+      process.exit(code);
+    }
+
     await generateAndSelect();
 
   } catch (error) {
+    if (fs.existsSync(tmpFilePath)) fs.unlinkSync(tmpFilePath);
     console.error('\x1b[31m\nAn unexpected error occurred:\x1b[0m', error.message);
     process.exit(1);
   }
