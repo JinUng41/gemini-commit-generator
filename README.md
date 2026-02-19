@@ -35,6 +35,58 @@ gcg
 4. **Provide Context**: (Optional) Enter extra info for the AI.
 5. **Choose Action**: Review the generated message and choose to Commit, Regenerate, Edit, or Cancel.
 
+Typical runtime: AI analysis usually takes around **30 seconds** (may vary by diff size, network, and model response time).
+
+## 🖥️ Prompt Walkthrough
+```text
+$ gcg
+🌐 Step 1: Select Language / Step 1: 언어 선택
+1) English
+2) 한국어
+Selection [1-2] > 1
+
+🚀 Starting AI Commit Generator...
+✔ Step 2: Staging changes and gathering data...
+🔒 Branch safety check passed.
+
+📊 Change Summary:
+  + 1 new files
+  ~ 2 modified files
+
+📝 Step 3: Provide context (Optional, press Enter to skip)
+> improve signup validation and send onboarding email after account creation
+
+✔ AI Analysis completed in 29.84s
+
+--------------------------------------------
+feat: improve signup validation flow
+
+auth-service.js: Tighten email/password validation rules
+signup-form.tsx: Add inline validation and clearer error messages
+email-welcome.ts: Send onboarding email after successful signup
+--------------------------------------------
+
+What would you like to do?
+1) ✅ Commit
+2) 🔄 Regenerate
+3) ✏️  Edit
+4) ❌ Cancel
+Selection [1-4] > 1
+🎉 Successfully committed!
+```
+
+## 🧭 Menu Actions
+- `1) Commit`: Commits immediately with the generated message.
+- `2) Regenerate`: Re-runs analysis and drafts a new message.
+- `3) Edit`: Opens your `$EDITOR` (or `vi`/`notepad`) to edit before commit.
+- `4) Cancel`: Exits without committing.
+
+## ⚠ Common Messages
+- `No upstream branch is configured`: Commit still works, but remote pointer comparison is skipped.
+- `Remote branch is ahead` / `Local and remote branches have diverged`: Commit is blocked for safety.
+- `This is not a git repository`: Run `gcg` inside a git repository.
+- `Gemini CLI authentication required`: Run `gemini` once and complete login.
+
 ## 🔄 Updating
 ```bash
 npm update -g @devjinung41/gemini-commit-generator
