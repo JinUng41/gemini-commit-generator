@@ -29,6 +29,7 @@ const STRINGS = {
   en: {
     starting: '\n🚀 Starting AI Commit Generator...',
     step2: 'Step 2: Checking environment and repository...',
+    step2Sync: 'Step 2: Checking local/remote branch pointers...',
     step2Staging: 'Step 2: Staging changes and gathering data...',
     noChanges: '✨ No changes staged. Please make some changes first.',
     summary: '\n📊 Change Summary:',
@@ -55,11 +56,26 @@ const STRINGS = {
     promptExample: '- index.js: Refactor AI prompt and optimize performance',
     errNotInstalled: '❌ Gemini CLI is not installed. Please install it using: npm install -g @google/gemini-cli',
     errNotAuthenticated: '🔑 Gemini CLI authentication required. Please run the "gemini" command in your terminal, follow the instructions to log in (e.g., Google login), and then try this program again.',
-    errNotGit: '📁 This is not a git repository. Please run this command inside a git project.'
+    errNotGit: '📁 This is not a git repository. Please run this command inside a git project.',
+    syncOk: '🔒 Branch safety check passed.',
+    syncAhead: '📌 Local branch is ahead of remote by',
+    syncAheadSuffix: 'commit(s).',
+    syncNoUpstream: '⚠ No upstream branch is configured. Remote pointer comparison was skipped.',
+    syncFetchWarn: '⚠ Could not refresh remote refs (git fetch failed). Comparison may be stale.',
+    syncBehind: '❌ Remote branch is ahead of local branch. Commit blocked for safety.',
+    syncDiverged: '❌ Local and remote branches have diverged. Commit blocked for safety.',
+    syncDetached: '❌ Detached HEAD detected. Commit blocked for safety.',
+    syncHint: 'Please run git pull --rebase (or sync manually) and try again.',
+    syncPointers: 'Branch pointer status:',
+    syncLocal: 'local',
+    syncRemote: 'remote',
+    syncAheadBehind: 'ahead/behind',
+    syncBlockedAtCommit: '❌ Branch safety check failed right before commit.'
   },
   ko: {
     starting: '\n🚀 AI 커밋 생성기를 시작합니다...',
     step2: 'Step 2: 환경 및 저장소 확인 중...',
+    step2Sync: 'Step 2: 로컬/원격 브랜치 포인터 비교 중...',
     step2Staging: 'Step 2: 변경 사항 스테이징 및 데이터 수집 중...',
     noChanges: '✨ 스테이징된 변경 사항이 없습니다. 먼저 파일을 수정해주세요.',
     summary: '\n📊 변경 요약:',
@@ -86,7 +102,21 @@ const STRINGS = {
     promptExample: '- index.js: AI 프롬프트 수정 및 성능 최적화',
     errNotInstalled: '❌ Gemini CLI가 설치되어 있지 않습니다. 다음 명령어로 설치해주세요: npm install -g @google/gemini-cli',
     errNotAuthenticated: '🔑 Gemini CLI 인증이 필요합니다. 터미널에서 "gemini" 명령어를 입력하여 안내에 따라 구글 로그인 등을 마친 뒤 다시 실행해주세요.',
-    errNotGit: '📁 이곳은 Git 저장소가 아닙니다. Git 프로젝트 내부에서 실행해주세요.'
+    errNotGit: '📁 이곳은 Git 저장소가 아닙니다. Git 프로젝트 내부에서 실행해주세요.',
+    syncOk: '🔒 브랜치 안전성 확인을 통과했습니다.',
+    syncAhead: '📌 로컬 브랜치가 원격보다',
+    syncAheadSuffix: '커밋 앞서 있습니다.',
+    syncNoUpstream: '⚠ 업스트림 브랜치가 설정되지 않아 원격 포인터 비교를 건너뜁니다.',
+    syncFetchWarn: '⚠ 원격 참조 갱신(git fetch)에 실패했습니다. 비교 결과가 오래되었을 수 있습니다.',
+    syncBehind: '❌ 원격 브랜치가 로컬보다 앞서 있습니다. 안전을 위해 커밋을 차단합니다.',
+    syncDiverged: '❌ 로컬/원격 브랜치가 갈라졌습니다(diverged). 안전을 위해 커밋을 차단합니다.',
+    syncDetached: '❌ Detached HEAD 상태입니다. 안전을 위해 커밋을 차단합니다.',
+    syncHint: 'git pull --rebase(또는 수동 동기화) 후 다시 시도해주세요.',
+    syncPointers: '브랜치 포인터 상태:',
+    syncLocal: '로컬',
+    syncRemote: '원격',
+    syncAheadBehind: 'ahead/behind',
+    syncBlockedAtCommit: '❌ 커밋 직전 브랜치 안전성 검사에 실패했습니다.'
   }
 };
 
@@ -206,6 +236,73 @@ async function commitWithMessage(message) {
 }
 
 /**
+ * Compare local and upstream branch pointers
+ */
+async function getBranchPointerStatus() {
+  const branch = (await execAsync('git rev-parse --abbrev-ref HEAD')).trim();
+  if (branch === 'HEAD') {
+    return { status: 'detached', branch };
+  }
+
+  let upstream;
+  try {
+    upstream = (await execAsync('git rev-parse --abbrev-ref --symbolic-full-name @{u}')).trim();
+  } catch (e) {
+    return { status: 'no-upstream', branch };
+  }
+
+  let fetchError = null;
+  try {
+    await execAsync('git fetch --quiet');
+  } catch (e) {
+    fetchError = e.message;
+  }
+
+  const localHead = (await execAsync('git rev-parse HEAD')).trim();
+  const remoteHead = (await execAsync('git rev-parse @{u}')).trim();
+  const countText = (await execAsync('git rev-list --left-right --count HEAD...@{u}')).trim();
+  const [aheadStr = '0', behindStr = '0'] = countText.split(/\s+/);
+  const ahead = Number(aheadStr) || 0;
+  const behind = Number(behindStr) || 0;
+
+  let status = 'up-to-date';
+  if (ahead > 0 && behind > 0) status = 'diverged';
+  else if (behind > 0) status = 'behind';
+  else if (ahead > 0) status = 'ahead';
+
+  return { status, branch, upstream, localHead, remoteHead, ahead, behind, fetchError };
+}
+
+function isSyncBlocked(status) {
+  return status === 'behind' || status === 'diverged' || status === 'detached';
+}
+
+function printPointerDetails(sync, t, color = COLORS.yellow) {
+  if (!sync || !sync.localHead || !sync.remoteHead || !sync.upstream) return;
+  console.log(`${color}${t.syncPointers}${COLORS.reset}`);
+  console.log(`  ${t.syncLocal} (${sync.branch}): ${sync.localHead}`);
+  console.log(`  ${t.syncRemote} (${sync.upstream}): ${sync.remoteHead}`);
+  console.log(`  ${t.syncAheadBehind}: ${sync.ahead}/${sync.behind}`);
+}
+
+function printSyncBlockReason(sync, t) {
+  if (sync.status === 'behind') console.error(`${COLORS.red}${t.syncBehind}${COLORS.reset}`);
+  else if (sync.status === 'diverged') console.error(`${COLORS.red}${t.syncDiverged}${COLORS.reset}`);
+  else console.error(`${COLORS.red}${t.syncDetached}${COLORS.reset}`);
+  printPointerDetails(sync, t, COLORS.yellow);
+  console.error(`${COLORS.yellow}${t.syncHint}${COLORS.reset}`);
+}
+
+async function enforceBranchSafety(t) {
+  const sync = await getBranchPointerStatus();
+  if (isSyncBlocked(sync.status)) {
+    printSyncBlockReason(sync, t);
+    return sync;
+  }
+  return sync;
+}
+
+/**
  * Main Logic
  */
 async function run(selectedLang = null) {
@@ -253,6 +350,15 @@ async function run(selectedLang = null) {
       process.exit(1);
     }
 
+    step2.update(t.step2Sync);
+    const preflightSync = await getBranchPointerStatus();
+    if (isSyncBlocked(preflightSync.status)) {
+      step2.stop('❌', COLORS.red);
+      printSyncBlockReason(preflightSync, t);
+      rl.close();
+      process.exit(1);
+    }
+
     step2.update(t.step2Staging);
     execSync('git add .');
     
@@ -270,6 +376,16 @@ async function run(selectedLang = null) {
     }
 
     step2.stop();
+    if (preflightSync.fetchError) {
+      console.log(`${COLORS.yellow}${t.syncFetchWarn}${COLORS.reset}`);
+    }
+    if (preflightSync.status === 'no-upstream') {
+      console.log(`${COLORS.yellow}${t.syncNoUpstream}${COLORS.reset}`);
+    } else if (preflightSync.status === 'ahead') {
+      console.log(`${COLORS.yellow}${t.syncAhead} ${preflightSync.ahead} ${t.syncAheadSuffix}${COLORS.reset}`);
+    } else if (preflightSync.status === 'up-to-date') {
+      console.log(`${COLORS.green}${t.syncOk}${COLORS.reset}`);
+    }
 
     // 2. Show Summary
     console.log(`${COLORS.magenta}${t.summary}${COLORS.reset}`);
@@ -343,6 +459,11 @@ ${diff}
 
       switch (choice) {
         case '1':
+          const syncBeforeCommit = await enforceBranchSafety(t);
+          if (isSyncBlocked(syncBeforeCommit.status)) {
+            console.log(`${COLORS.red}${t.syncBlockedAtCommit}${COLORS.reset}`);
+            break;
+          }
           await commitWithMessage(aiMsg);
           console.log(`${COLORS.green}${t.success}${COLORS.reset}`);
           rl.close();
@@ -353,6 +474,11 @@ ${diff}
         case '3':
           const editedMsg = await editInEditor(aiMsg);
           if (editedMsg) {
+            const syncBeforeEditedCommit = await enforceBranchSafety(t);
+            if (isSyncBlocked(syncBeforeEditedCommit.status)) {
+              console.log(`${COLORS.red}${t.syncBlockedAtCommit}${COLORS.reset}`);
+              break;
+            }
             await commitWithMessage(editedMsg);
             console.log(`${COLORS.green}${t.successEdited}${COLORS.reset}`);
             rl.close();

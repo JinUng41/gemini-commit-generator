@@ -8,6 +8,7 @@ A cross-platform, zero-config AI commit tool that learns your project's style an
 - **Multi-language Support**: Select between English and Korean at startup.
 - **Cross-Platform**: Works seamlessly on macOS, Linux, and Windows via Node.js.
 - **Auto Staging**: Automatically stages all changes (`git add .`) on execution.
+- **Branch Safety Guard**: Compares local and remote branch pointers before commit. Blocks commit when branch is behind/diverged/detached.
 - **Zero Config**: Automatically detects your project's language and format from `git history`.
 - **Context Aware**: Captures the "why" from optional user input.
 - **Interactive**: Review, regenerate, or edit messages before committing.
@@ -29,9 +30,10 @@ Just type `gcg` in any git repository:
 gcg
 ```
 1. **Select Language**: Choose English (1) or Korean (2).
-2. **Review Summary**: Check the summary of staged changes.
-3. **Provide Context**: (Optional) Enter extra info for the AI.
-4. **Choose Action**: Review the generated message and choose to Commit, Regenerate, Edit, or Cancel.
+2. **Safety Check**: The tool compares local/remote branch pointers before staging and again right before commit.
+3. **Review Summary**: Check the summary of staged changes.
+4. **Provide Context**: (Optional) Enter extra info for the AI.
+5. **Choose Action**: Review the generated message and choose to Commit, Regenerate, Edit, or Cancel.
 
 ## 🔄 Updating
 ```bash
