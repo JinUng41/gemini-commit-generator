@@ -1,8 +1,14 @@
 # Configuration
 
-This document explains how `.gcgrc.json` works and what each supported setting does.
+This document explains both configuration layers used by `gcg`:
+- repository settings in `.gcgrc.json`
+- user language preference in `~/.config/gcg/settings.json`
 
-## File Location
+## Configuration Layers
+
+`gcg` uses two different settings locations.
+
+## Repository Settings
 
 `gcg` looks for configuration in the git repository root:
 
@@ -10,7 +16,30 @@ This document explains how `.gcgrc.json` works and what each supported setting d
 <repo-root>/.gcgrc.json
 ```
 
-It does not currently read from your home directory or a global config location.
+This file controls repository behavior such as `autoStage` and `strictBranchCheck`.
+
+## Global Language Setting
+
+`gcg` can also save a default language for the current user here:
+
+```text
+~/.config/gcg/settings.json
+```
+
+Current scope:
+- this file stores only the default language
+- supported values are `en` and `ko`
+- use `gcg config` to write or reset it
+
+Example:
+
+```json
+{
+  "language": "ko"
+}
+```
+
+If you reset the default language and the file becomes empty, `gcg` deletes `settings.json`.
 
 ## Configuration Loading Flow
 
@@ -44,6 +73,12 @@ flowchart TD
 Practical note:
 - `src/config.js` collects warning strings and returns them with the config result
 - the CLI prints those warnings later during normal execution
+
+The global language setting is separate from this flow.
+
+Language selection priority is:
+1. saved global language in `~/.config/gcg/settings.json`
+2. interactive language selection prompt
 
 ## When The File Is Missing
 

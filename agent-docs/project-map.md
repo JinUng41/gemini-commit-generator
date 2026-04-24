@@ -8,6 +8,7 @@ This document explains where major behavior lives in the codebase so an agent ca
   - CLI entrypoint
   - Orchestrates the full runtime flow
   - Wires together config, git state, AI generation, validation, editor flow, and commit flow
+  - Routes commands like `help` and `config`
 
 - `src/`
   - Core implementation modules
@@ -40,6 +41,11 @@ This file should stay orchestration-focused.
 
 If logic becomes reusable, move it into `src/` rather than growing `index.js` again.
 
+This file also decides:
+- whether saved global language is used
+- whether interactive language selection is needed
+- when `gcg config` runs instead of the normal commit flow
+
 ## `src/config.js`
 
 Use this file when changing:
@@ -53,6 +59,18 @@ Important current rules:
 - unknown keys are ignored with warnings
 - `historyCount < 5` is clamped to `5`
 - Gemini model selection is intentionally not configurable
+
+## `src/global-config.js`
+
+Use this file when changing:
+- global language preference storage
+- the location of `~/.config/gcg/settings.json`
+- reset behavior for saved language
+
+Important current rules:
+- this file is separate from `.gcgrc.json`
+- current global scope is language preference only
+- reset removes `settings.json` when it becomes empty
 
 ## `src/git.js`
 
@@ -122,6 +140,13 @@ Update this when changing:
 - config normalization
 - config fallback behavior
 - warnings for invalid config
+
+## `test/global-config.test.js`
+
+Update this when changing:
+- `~/.config/gcg/settings.json` location
+- saved default language behavior
+- reset behavior for global language
 
 ## `test/git.test.js`
 

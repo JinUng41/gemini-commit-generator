@@ -30,7 +30,14 @@ git add path/to/file
 gcg
 ```
 
-3. Choose a language, optionally add extra context, then select one of:
+3. If no default language is saved yet, choose a language.
+
+You can save one for later with:
+```bash
+gcg config
+```
+
+4. Optionally add extra context, then select one of:
 - `Commit`
 - `Regenerate`
 - `Edit` to open your editor and commit immediately if the edited message is valid
@@ -38,6 +45,8 @@ gcg
 
 ## What To Expect
 - `gcg` uses staged changes only by default.
+- You can save a default language in `~/.config/gcg/settings.json` with `gcg config`.
+- Use `gcg help` for a short command summary.
 - If you want it to stage everything automatically, create `.gcgrc.json` at the git root and set `autoStage` to `true`.
 - Branch safety checks are enabled by default.
 - If Gemini returns unusable output, `gcg` retries once automatically.

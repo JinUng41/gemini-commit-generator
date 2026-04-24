@@ -19,6 +19,8 @@ This repository contains `gcg`, a Node.js CLI that generates git commit messages
 Current product shape:
 - staged-only by default
 - optional per-repo config via `.gcgrc.json` at the git root
+- optional global language preference via `~/.config/gcg/settings.json`
+- simple `help` and `config` CLI commands
 - branch context and recent commit history are prompt inputs
 - minimal commit-message validation
 - interactive actions: Commit, Regenerate, Edit, Cancel
@@ -146,8 +148,11 @@ Supported `.gcgrc.json` keys are currently:
 - `strictBranchCheck`
 - `fetchBeforeSyncCheck`
 
-Config file location:
+Repository config file location:
 - git repository root only
+
+Global user setting location:
+- `~/.config/gcg/settings.json` for default language only
 
 Unknown keys are ignored with warnings.
 

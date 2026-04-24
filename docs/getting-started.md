@@ -51,13 +51,17 @@ gcg
 
 The normal flow is:
 
-1. Select English or Korean.
+1. If you have not saved a default language, select English or Korean.
 2. `gcg` checks that Gemini CLI and git are available.
 3. `gcg` reads staged changes, or stages everything if `autoStage` is enabled.
 4. `gcg` shows a summary of the staged files.
 5. You can enter optional context such as the reason for the change.
 6. Gemini drafts a commit message.
 7. You choose `Commit`, `Regenerate`, `Edit`, or `Cancel`.
+
+Tip:
+- save a default language with `gcg config`
+- the default language is stored in `~/.config/gcg/settings.json`
 
 Important detail:
 - `Edit` is not a preview-only step
@@ -88,6 +92,7 @@ Possible interaction:
 
 ```text
 $ gcg
+Tip: save a default language with `gcg config`
 Step 1: choose language
 Step 2: staged changes are collected
 Step 3: optionally describe why the change exists
@@ -95,6 +100,22 @@ Step 4: Gemini drafts a message
 ```
 
 Then you can commit or adjust the result.
+
+## Save A Default Language
+
+If you do not want to choose a language every time, run:
+
+```bash
+gcg config
+```
+
+Then choose:
+- `Default language`
+- `English` or `Korean`
+
+If you choose `Reset`, `gcg` removes the saved default language.
+
+When that leaves `~/.config/gcg/settings.json` empty, `gcg` deletes the file.
 
 ## Local Development Usage
 
