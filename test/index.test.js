@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { run } = require('../index');
+const { execute, run } = require('../index');
 
 function createPromptControl(answers) {
   const queue = [...answers];
@@ -46,13 +46,17 @@ function createOverrides(custom = {}) {
     console: consoleSpy,
     process: processRef,
     createPrompt: () => createPromptControl(custom.answers || ['', '4']),
+    selectLanguage: custom.selectLanguage,
     startSpinner: () => createSpinner(),
+    printHelp: custom.printHelp,
     printConfigWarnings: () => {},
     printSummary: () => {},
     printPointerDetails: () => {},
     printValidationIssues: () => {},
     printValidationWarnings: () => {},
     printCommitMessage: () => {},
+    runConfigMenu: custom.runConfigMenu,
+    parseCliArgs: custom.parseCliArgs,
     loadConfig: () => ({
       config: {
         autoStage: false,
@@ -82,9 +86,100 @@ function createOverrides(custom = {}) {
     })),
     editInEditor: custom.editInEditor || (async () => ({ status: 'unchanged', message: 'same message' })),
     commitWithMessage: custom.commitWithMessage || (async () => {}),
+    loadGlobalSettings: custom.loadGlobalSettings || (() => ({ settings: {} })),
+    setGlobalLanguage: custom.setGlobalLanguage || (async () => {}),
+    resetGlobalLanguage: custom.resetGlobalLanguage || (async () => ({})),
     notifyComplete: () => {},
   };
 }
+
+test('execute prints help for help command', async () => {
+  const overrides = createOverrides({
+    parseCliArgs: () => ({ command: 'help' }),
+  });
+
+  await execute(['help'], overrides);
+
+  assert.match(overrides.console.lines.join('\n'), /Usage/);
+  assert.match(overrides.console.lines.join('\n'), /gcg config/);
+});
+
+test('execute uses saved default language without prompting', async () => {
+  let seenPromptLang = null;
+  const overrides = createOverrides({
+    answers: ['4'],
+    loadGlobalSettings: () => ({ settings: { language: 'ko' } }),
+    selectLanguage: async () => {
+      throw new Error('selectLanguage should not be called');
+    },
+    buildPrompt: ({ t }) => {
+      seenPromptLang = t.promptLang;
+      return 'prompt';
+    },
+  });
+
+  await execute([], overrides);
+
+  assert.equal(seenPromptLang, 'KOREAN (한국어)');
+});
+
+test('execute shows config hint when no default language is set', async () => {
+  let showConfigHint = null;
+  const overrides = createOverrides({
+    answers: ['4'],
+    selectLanguage: async (question, options = {}) => {
+      showConfigHint = options.showConfigHint;
+      return 'en';
+    },
+  });
+
+  await execute([], overrides);
+
+  assert.equal(showConfigHint, true);
+});
+
+test('execute runs config menu and saves selected language', async () => {
+  const calls = [];
+  const overrides = createOverrides({
+    answers: ['1', '2', '2'],
+    setGlobalLanguage: async (language) => {
+      calls.push(language);
+    },
+  });
+
+  await execute(['config'], overrides);
+
+  assert.deepEqual(calls, ['ko']);
+  assert.match(overrides.console.lines.join('\n'), /Default language/);
+});
+
+test('execute reports config save failures without throwing raw errors', async () => {
+  const overrides = createOverrides({
+    answers: ['1', '1'],
+    setGlobalLanguage: async () => {
+      throw new Error('permission denied');
+    },
+  });
+
+  await execute(['config'], overrides);
+
+  assert.equal(overrides.process.exitCode, 1);
+  assert.match(overrides.console.lines.join('\n'), /permission denied/);
+});
+
+test('execute reports config reset failures without throwing raw errors', async () => {
+  const overrides = createOverrides({
+    answers: ['1', '3'],
+    resetGlobalLanguage: async () => {
+      throw new Error('reset failed');
+    },
+  });
+
+  await execute(['config'], overrides);
+
+  assert.equal(overrides.process.exitCode, 1);
+  assert.match(overrides.console.lines.join('\n'), /reset failed/);
+});
 
 test('run blocks commit when staged changes changed after generation', async () => {
   const snapshots = ['snap-1', 'snap-2'];

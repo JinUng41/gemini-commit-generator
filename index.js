@@ -4,6 +4,8 @@ const {
   COLORS,
   STRINGS,
   createPrompt,
+  printHelp,
+  runConfigMenu,
   selectLanguage,
   startSpinner,
   printConfigWarnings,
@@ -13,7 +15,13 @@ const {
   printValidationWarnings,
   printCommitMessage,
 } = require('./src/ui');
+const { parseCliArgs } = require('./src/cli');
 const { loadConfig } = require('./src/config');
+const {
+  loadGlobalSettings,
+  resetGlobalLanguage,
+  setGlobalLanguage,
+} = require('./src/global-config');
 const {
   getGitRoot,
   getBranchPointerStatus,
@@ -98,6 +106,7 @@ async function run(selectedLang = null, overrides = {}) {
   const notifyCompleteImpl = overrides.notifyComplete || notifyComplete;
   const consoleRef = overrides.console || console;
   const processRef = overrides.process || process;
+  const showConfigHint = Boolean(overrides.showConfigHint);
 
   const promptControl = createPromptImpl();
   const cwd = typeof processRef.cwd === 'function' ? processRef.cwd() : process.cwd();
@@ -131,7 +140,10 @@ async function run(selectedLang = null, overrides = {}) {
   };
 
   try {
-    const lang = selectedLang || await selectLanguageImpl(promptControl.question);
+    const lang = selectedLang || await selectLanguageImpl(promptControl.question, {
+      consoleRef,
+      showConfigHint,
+    });
     t = strings[lang];
 
     consoleRef.log(`${colors.magenta}${t.starting}${colors.reset}`);
@@ -407,10 +419,68 @@ async function run(selectedLang = null, overrides = {}) {
   }
 }
 
+async function execute(argv = process.argv.slice(2), overrides = {}) {
+  const parseCliArgsImpl = overrides.parseCliArgs || parseCliArgs;
+  const printHelpImpl = overrides.printHelp || printHelp;
+  const runConfigMenuImpl = overrides.runConfigMenu || runConfigMenu;
+  const createPromptImpl = overrides.createPrompt || createPrompt;
+  const loadGlobalSettingsImpl = overrides.loadGlobalSettings || loadGlobalSettings;
+  const setGlobalLanguageImpl = overrides.setGlobalLanguage || setGlobalLanguage;
+  const resetGlobalLanguageImpl = overrides.resetGlobalLanguage || resetGlobalLanguage;
+  const consoleRef = overrides.console || console;
+  const processRef = overrides.process || process;
+
+  const parsedArgs = parseCliArgsImpl(argv);
+  if (parsedArgs.command === 'invalid') {
+    consoleRef.error(parsedArgs.error);
+    printHelpImpl(consoleRef);
+    processRef.exitCode = 1;
+    return;
+  }
+
+  if (parsedArgs.command === 'help') {
+    printHelpImpl(consoleRef);
+    return;
+  }
+
+  if (parsedArgs.command === 'config') {
+    const promptControl = createPromptImpl();
+
+    try {
+      await runConfigMenuImpl({
+        question: promptControl.question,
+        consoleRef,
+        onSetLanguage: async (language) => {
+          await setGlobalLanguageImpl(language, { homeDir: overrides.homeDir });
+        },
+        onResetLanguage: async () => {
+          await resetGlobalLanguageImpl({ homeDir: overrides.homeDir });
+        },
+      });
+    } catch (error) {
+      consoleRef.error(`Error: ${error.message}`);
+      processRef.exitCode = 1;
+    } finally {
+      promptControl.close();
+    }
+
+    return;
+  }
+
+  const globalSettings = loadGlobalSettingsImpl({ homeDir: overrides.homeDir });
+  const selectedLang = globalSettings.settings.language || null;
+
+  await run(selectedLang, {
+    ...overrides,
+    showConfigHint: !selectedLang,
+  });
+}
+
 if (require.main === module) {
-  run();
+  execute(process.argv.slice(2));
 }
 
 module.exports = {
+  execute,
   run,
 };

@@ -200,11 +200,20 @@ function startSpinner(message) {
   };
 }
 
-async function selectLanguage(question) {
+async function selectLanguage(question, options = {}) {
+  const consoleRef = options.consoleRef || console;
+  const showConfigHint = Boolean(options.showConfigHint);
+  let shouldShowConfigHint = showConfigHint;
+
   while (true) {
-    console.log(`${COLORS.cyan}\n🌐 Step 1: Select Language / Step 1: 언어 선택${COLORS.reset}`);
-    console.log('1) English');
-    console.log('2) 한국어');
+    if (shouldShowConfigHint) {
+      consoleRef.log('Tip: save a default language with `gcg config`');
+      shouldShowConfigHint = false;
+    }
+
+    consoleRef.log(`${COLORS.cyan}\n🌐 Step 1: Select Language / Step 1: 언어 선택${COLORS.reset}`);
+    consoleRef.log('1) English');
+    consoleRef.log('2) 한국어');
     const langChoice = await question('Selection [1-2] > ');
 
     if (langChoice === '1') {
@@ -215,7 +224,82 @@ async function selectLanguage(question) {
       return 'ko';
     }
 
-    console.log(`${COLORS.red}Invalid selection. Please choose 1 or 2. / 잘못된 선택입니다. 1 또는 2를 선택해주세요.${COLORS.reset}`);
+    consoleRef.log(`${COLORS.red}Invalid selection. Please choose 1 or 2. / 잘못된 선택입니다. 1 또는 2를 선택해주세요.${COLORS.reset}`);
+  }
+}
+
+function printHelp(consoleRef = console) {
+  consoleRef.log('Usage');
+  consoleRef.log('  gcg');
+  consoleRef.log('  gcg config');
+  consoleRef.log('  gcg help');
+  consoleRef.log('');
+  consoleRef.log('What it does');
+  consoleRef.log('  gcg writes a commit message with Gemini');
+  consoleRef.log('');
+  consoleRef.log('Commands');
+  consoleRef.log('  config   open settings');
+  consoleRef.log('  help     show help');
+  consoleRef.log('');
+  consoleRef.log('Tip');
+  consoleRef.log('  Save a default language with `gcg config`');
+}
+
+async function runConfigMenu({ question, onSetLanguage, onResetLanguage, consoleRef = console }) {
+  while (true) {
+    consoleRef.log('Settings');
+    consoleRef.log('');
+    consoleRef.log('Choose an option');
+    consoleRef.log('1) Default language');
+    consoleRef.log('2) Exit');
+
+    const choice = await question('Selection [1-2] > ');
+    if (choice === '1') {
+      while (true) {
+        consoleRef.log('');
+        consoleRef.log('Default language');
+        consoleRef.log('');
+        consoleRef.log('Choose a language');
+        consoleRef.log('1) English');
+        consoleRef.log('2) Korean');
+        consoleRef.log('3) Reset');
+        consoleRef.log('4) Back');
+
+        const languageChoice = await question('Selection [1-4] > ');
+        if (languageChoice === '1') {
+          await onSetLanguage('en');
+          consoleRef.log('Saved: default language is English');
+          break;
+        }
+
+        if (languageChoice === '2') {
+          await onSetLanguage('ko');
+          consoleRef.log('Saved: default language is Korean');
+          break;
+        }
+
+        if (languageChoice === '3') {
+          await onResetLanguage();
+          consoleRef.log('Reset: no default language');
+          break;
+        }
+
+        if (languageChoice === '4') {
+          break;
+        }
+
+        consoleRef.log('Invalid selection. Please choose 1, 2, 3, or 4.');
+      }
+
+      consoleRef.log('');
+      continue;
+    }
+
+    if (choice === '2') {
+      return;
+    }
+
+    consoleRef.log('Invalid selection. Please choose 1 or 2.');
   }
 }
 
@@ -280,10 +364,12 @@ module.exports = {
   createPrompt,
   printCommitMessage,
   printConfigWarnings,
+  printHelp,
   printPointerDetails,
   printSummary,
   printValidationIssues,
   printValidationWarnings,
+  runConfigMenu,
   selectLanguage,
   startSpinner,
 };
