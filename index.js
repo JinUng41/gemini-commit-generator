@@ -19,6 +19,7 @@ const {
   getBranchPointerStatus,
   isSyncBlocked,
   stageAllChanges,
+  getStagedSnapshot,
   getStagedSummary,
   collectStagedDiffContext,
   getRecentHistory,
@@ -34,130 +35,175 @@ const {
 const { editInEditor, commitWithMessage } = require('./src/commit');
 const { notifyComplete } = require('./src/notifier');
 
-function printSyncBlockReason(sync, t) {
+function printSyncBlockReason(sync, t, colors, consoleRef, printPointerDetailsImpl) {
   if (sync.status === 'behind') {
-    console.error(`${COLORS.red}${t.syncBehind}${COLORS.reset}`);
+    consoleRef.error(`${colors.red}${t.syncBehind}${colors.reset}`);
   } else if (sync.status === 'diverged') {
-    console.error(`${COLORS.red}${t.syncDiverged}${COLORS.reset}`);
+    consoleRef.error(`${colors.red}${t.syncDiverged}${colors.reset}`);
   } else {
-    console.error(`${COLORS.red}${t.syncDetached}${COLORS.reset}`);
+    consoleRef.error(`${colors.red}${t.syncDetached}${colors.reset}`);
   }
 
-  printPointerDetails(sync, t, COLORS.yellow);
-  console.error(`${COLORS.yellow}${t.syncHint}${COLORS.reset}`);
+  printPointerDetailsImpl(sync, t, colors.yellow);
+  consoleRef.error(`${colors.yellow}${t.syncHint}${colors.reset}`);
 }
 
-function printSyncStatus(sync, t) {
+function printSyncStatus(sync, t, colors, consoleRef) {
   if (!sync) {
     return;
   }
 
   if (sync.fetchError) {
-    console.log(`${COLORS.yellow}${t.syncFetchWarn}${COLORS.reset}`);
+    consoleRef.log(`${colors.yellow}${t.syncFetchWarn}${colors.reset}`);
   }
 
   if (sync.status === 'no-upstream') {
-    console.log(`${COLORS.yellow}${t.syncNoUpstream}${COLORS.reset}`);
+    consoleRef.log(`${colors.yellow}${t.syncNoUpstream}${colors.reset}`);
   } else if (sync.status === 'ahead') {
-    console.log(`${COLORS.yellow}${t.syncAhead} ${sync.ahead} ${t.syncAheadSuffix}${COLORS.reset}`);
+    consoleRef.log(`${colors.yellow}${t.syncAhead} ${sync.ahead} ${t.syncAheadSuffix}${colors.reset}`);
   } else if (sync.status === 'up-to-date') {
-    console.log(`${COLORS.green}${t.syncOk}${COLORS.reset}`);
+    consoleRef.log(`${colors.green}${t.syncOk}${colors.reset}`);
   }
 }
 
-async function run(selectedLang = null) {
-  const promptControl = createPrompt();
-  let t = STRINGS.en;
+async function run(selectedLang = null, overrides = {}) {
+  const colors = overrides.COLORS || COLORS;
+  const strings = overrides.STRINGS || STRINGS;
+  const createPromptImpl = overrides.createPrompt || createPrompt;
+  const selectLanguageImpl = overrides.selectLanguage || selectLanguage;
+  const startSpinnerImpl = overrides.startSpinner || startSpinner;
+  const printConfigWarningsImpl = overrides.printConfigWarnings || printConfigWarnings;
+  const printSummaryImpl = overrides.printSummary || printSummary;
+  const printPointerDetailsImpl = overrides.printPointerDetails || printPointerDetails;
+  const printValidationIssuesImpl = overrides.printValidationIssues || printValidationIssues;
+  const printValidationWarningsImpl = overrides.printValidationWarnings || printValidationWarnings;
+  const printCommitMessageImpl = overrides.printCommitMessage || printCommitMessage;
+  const loadConfigImpl = overrides.loadConfig || loadConfig;
+  const getGitRootImpl = overrides.getGitRoot || getGitRoot;
+  const getBranchPointerStatusImpl = overrides.getBranchPointerStatus || getBranchPointerStatus;
+  const isSyncBlockedImpl = overrides.isSyncBlocked || isSyncBlocked;
+  const stageAllChangesImpl = overrides.stageAllChanges || stageAllChanges;
+  const getStagedSnapshotImpl = overrides.getStagedSnapshot || getStagedSnapshot;
+  const getStagedSummaryImpl = overrides.getStagedSummary || getStagedSummary;
+  const collectStagedDiffContextImpl = overrides.collectStagedDiffContext || collectStagedDiffContext;
+  const getRecentHistoryImpl = overrides.getRecentHistory || getRecentHistory;
+  const getBranchContextImpl = overrides.getBranchContext || getBranchContext;
+  const ensureGeminiInstalledImpl = overrides.ensureGeminiInstalled || ensureGeminiInstalled;
+  const buildPromptImpl = overrides.buildPrompt || buildPrompt;
+  const generateCommitMessageImpl = overrides.generateCommitMessage || generateCommitMessage;
+  const classifyGeminiErrorImpl = overrides.classifyGeminiError || classifyGeminiError;
+  const validateCommitMessageImpl = overrides.validateCommitMessage || validateCommitMessage;
+  const editInEditorImpl = overrides.editInEditor || editInEditor;
+  const commitWithMessageImpl = overrides.commitWithMessage || commitWithMessage;
+  const notifyCompleteImpl = overrides.notifyComplete || notifyComplete;
+  const consoleRef = overrides.console || console;
+  const processRef = overrides.process || process;
+
+  const promptControl = createPromptImpl();
+  const cwd = typeof processRef.cwd === 'function' ? processRef.cwd() : process.cwd();
+  let t = strings.en;
+
+  const collectAnalysisState = async (gitRoot, config) => {
+    if (config.autoStage) {
+      await stageAllChangesImpl(gitRoot);
+    }
+
+    const [summary, diffContext, history, branchContext, stagedSnapshot] = await Promise.all([
+      getStagedSummaryImpl(gitRoot),
+      collectStagedDiffContextImpl(gitRoot),
+      getRecentHistoryImpl(gitRoot, config.historyCount),
+      getBranchContextImpl(gitRoot),
+      getStagedSnapshotImpl(gitRoot),
+    ]);
+
+    return {
+      summary,
+      diffContext,
+      history,
+      branchContext,
+      stagedSnapshot,
+    };
+  };
+
+  const hasStagedChangesChanged = async (gitRoot, analysisState) => {
+    const currentSnapshot = await getStagedSnapshotImpl(gitRoot);
+    return currentSnapshot !== analysisState.stagedSnapshot;
+  };
 
   try {
-    const lang = selectedLang || await selectLanguage(promptControl.question);
-    t = STRINGS[lang];
+    const lang = selectedLang || await selectLanguageImpl(promptControl.question);
+    t = strings[lang];
 
-    console.log(`${COLORS.magenta}${t.starting}${COLORS.reset}`);
+    consoleRef.log(`${colors.magenta}${t.starting}${colors.reset}`);
 
-    const step2 = startSpinner(t.step2);
+    const step2 = startSpinnerImpl(t.step2);
 
     let gitRoot;
     try {
-      gitRoot = await getGitRoot(process.cwd());
+      gitRoot = await getGitRootImpl(cwd);
     } catch (error) {
-      step2.stop('❌', COLORS.red);
-      console.error(`${COLORS.red}${t.errNotGit}${COLORS.reset}`);
-      process.exitCode = 1;
+      step2.stop('❌', colors.red);
+      consoleRef.error(`${colors.red}${t.errNotGit}${colors.reset}`);
+      processRef.exitCode = 1;
       return;
     }
 
     try {
-      await ensureGeminiInstalled(gitRoot);
+      await ensureGeminiInstalledImpl(gitRoot);
     } catch (error) {
-      step2.stop('❌', COLORS.red);
-      console.error(`${COLORS.red}${t.errNotInstalled}${COLORS.reset}`);
-      process.exitCode = 1;
+      step2.stop('❌', colors.red);
+      consoleRef.error(`${colors.red}${t.errNotInstalled}${colors.reset}`);
+      processRef.exitCode = 1;
       return;
     }
 
-    const { config, warnings } = loadConfig(gitRoot, t);
+    const { config, warnings } = loadConfigImpl(gitRoot, t);
 
     let preflightSync = null;
     if (config.strictBranchCheck) {
       step2.update(t.step2Sync);
-      preflightSync = await getBranchPointerStatus(gitRoot, {
+      preflightSync = await getBranchPointerStatusImpl(gitRoot, {
         fetchBeforeSyncCheck: config.fetchBeforeSyncCheck,
       });
 
-      if (isSyncBlocked(preflightSync.status)) {
-        step2.stop('❌', COLORS.red);
-        printSyncBlockReason(preflightSync, t);
-        process.exitCode = 1;
+      if (isSyncBlockedImpl(preflightSync.status)) {
+        step2.stop('❌', colors.red);
+        printSyncBlockReason(preflightSync, t, colors, consoleRef, printPointerDetailsImpl);
+        processRef.exitCode = 1;
         return;
       }
     }
 
     step2.update(config.autoStage ? t.step2AutoStage : t.step2UsingStaged);
 
-    const collectAnalysisState = async () => {
-      if (config.autoStage) {
-        await stageAllChanges(gitRoot);
-      }
-
-      const [summary, diffContext, history, branchContext] = await Promise.all([
-        getStagedSummary(gitRoot),
-        collectStagedDiffContext(gitRoot),
-        getRecentHistory(gitRoot, config.historyCount),
-        getBranchContext(gitRoot),
-      ]);
-
-      return { summary, diffContext, history, branchContext };
-    };
-
-    const initialState = await collectAnalysisState();
-    const { summary } = initialState;
+    let analysisState = await collectAnalysisState(gitRoot, config);
+    const { summary } = analysisState;
 
     if (summary.total === 0) {
-      step2.stop('⚠', COLORS.yellow);
-      console.log(`${COLORS.yellow}${t.noChanges}${COLORS.reset}`);
+      step2.stop('⚠', colors.yellow);
+      consoleRef.log(`${colors.yellow}${t.noChanges}${colors.reset}`);
       return;
     }
 
     step2.stop();
-    printConfigWarnings(warnings, t);
+    printConfigWarningsImpl(warnings, t);
 
     if (config.strictBranchCheck) {
-      printSyncStatus(preflightSync, t);
+      printSyncStatus(preflightSync, t, colors, consoleRef);
     } else {
-      console.log(`${COLORS.yellow}${t.syncCheckDisabled}${COLORS.reset}`);
+      consoleRef.log(`${colors.yellow}${t.syncCheckDisabled}${colors.reset}`);
     }
 
-    console.log(config.autoStage
-      ? `${COLORS.yellow}${t.autoStageNotice}${COLORS.reset}`
-      : `${COLORS.green}${t.stagedOnlyNotice}${COLORS.reset}`);
+    consoleRef.log(config.autoStage
+      ? `${colors.yellow}${t.autoStageNotice}${colors.reset}`
+      : `${colors.green}${t.stagedOnlyNotice}${colors.reset}`);
 
-    printSummary(summary, t);
+    printSummaryImpl(summary, t);
 
-    console.log(`${COLORS.cyan}${t.step3}${COLORS.reset}`);
+    consoleRef.log(`${colors.cyan}${t.step3}${colors.reset}`);
     const userContext = await promptControl.question('> ');
 
-    const buildPromptFromState = (state) => buildPrompt({
+    const buildPromptFromState = (state) => buildPromptImpl({
       t,
       history: state.history,
       userContext,
@@ -168,12 +214,12 @@ async function run(selectedLang = null) {
     });
 
     const generateCandidate = async (prompt) => {
-      console.log('');
-      const step4 = startSpinner(t.step4);
+      consoleRef.log('');
+      const step4 = startSpinnerImpl(t.step4);
       const startTime = Date.now();
 
       try {
-        const result = await generateCommitMessage({
+        const result = await generateCommitMessageImpl({
           cwd: gitRoot,
           prompt,
           maxAttempts: 2,
@@ -182,157 +228,189 @@ async function run(selectedLang = null) {
         const duration = ((Date.now() - startTime) / 1000).toFixed(2);
         step4.update(`${t.analysisDone} ${duration}s`);
         step4.stop();
-        notifyComplete(config);
+        notifyCompleteImpl(config);
 
         if (result.attempts > 1) {
-          console.log(`${COLORS.yellow}${t.validationRetrying}${COLORS.reset}`);
+          consoleRef.log(`${colors.yellow}${t.validationRetrying}${colors.reset}`);
         }
 
-        printCommitMessage(result.message);
+        printCommitMessageImpl(result.message);
         if (result.warnings.length > 0) {
-          console.log(`${COLORS.yellow}${t.validationWarnings}${COLORS.reset}`);
-          printValidationWarnings(result.warnings, t);
+          consoleRef.log(`${colors.yellow}${t.validationWarnings}${colors.reset}`);
+          printValidationWarningsImpl(result.warnings, t);
         }
         if (!result.valid) {
-          console.log(`${COLORS.yellow}${t.validationFailed}${COLORS.reset}`);
-          printValidationIssues(result.blockingIssues, t);
-          console.log(`${COLORS.yellow}${t.validationNeedsAction}${COLORS.reset}`);
+          consoleRef.log(`${colors.yellow}${t.validationFailed}${colors.reset}`);
+          printValidationIssuesImpl(result.blockingIssues, t);
+          consoleRef.log(`${colors.yellow}${t.validationNeedsAction}${colors.reset}`);
         }
 
         return result;
       } catch (error) {
-        step4.stop('❌', COLORS.red);
-        const errorType = classifyGeminiError(error);
+        step4.stop('❌', colors.red);
+        const errorType = classifyGeminiErrorImpl(error);
         if (errorType === 'auth') {
-          console.error(`${COLORS.red}${t.errNotAuthenticated}${COLORS.reset}`);
+          consoleRef.error(`${colors.red}${t.errNotAuthenticated}${colors.reset}`);
         } else {
-          console.error(`${COLORS.red}${t.errGeminiFailed}${COLORS.reset}`);
+          consoleRef.error(`${colors.red}${t.errGeminiFailed}${colors.reset}`);
           if (error.stderr) {
-            console.error(`${COLORS.red}${error.stderr.trim()}${COLORS.reset}`);
+            consoleRef.error(`${colors.red}${error.stderr.trim()}${colors.reset}`);
           }
         }
 
-        process.exitCode = 1;
+        processRef.exitCode = 1;
         return null;
       }
     };
 
-    let generated = await generateCandidate(buildPromptFromState(initialState));
+    let generated = await generateCandidate(buildPromptFromState(analysisState));
     if (!generated) {
       return;
     }
 
     while (true) {
-      console.log(`${COLORS.cyan}${t.menuTitle}${COLORS.reset}`);
-      console.log(`1) ${t.menuCommit}`);
-      console.log(`2) ${t.menuRegen}`);
-      console.log(`3) ${t.menuEdit}`);
-      console.log(`4) ${t.menuCancel}`);
+      consoleRef.log(`${colors.cyan}${t.menuTitle}${colors.reset}`);
+      consoleRef.log(`1) ${t.menuCommit}`);
+      consoleRef.log(`2) ${t.menuRegen}`);
+      consoleRef.log(`3) ${t.menuEdit}`);
+      consoleRef.log(`4) ${t.menuCancel}`);
 
       const choice = await promptControl.question(t.selection);
 
       switch (choice) {
         case '1': {
           if (!generated.valid) {
-            console.log(`${COLORS.red}${t.validationNeedsAction}${COLORS.reset}`);
-            printValidationIssues(generated.blockingIssues, t);
+            consoleRef.log(`${colors.red}${t.validationNeedsAction}${colors.reset}`);
+            printValidationIssuesImpl(generated.blockingIssues, t);
             break;
           }
 
           if (config.strictBranchCheck) {
-            const syncBeforeCommit = await getBranchPointerStatus(gitRoot, {
+            const syncBeforeCommit = await getBranchPointerStatusImpl(gitRoot, {
               fetchBeforeSyncCheck: config.fetchBeforeSyncCheck,
             });
-            if (isSyncBlocked(syncBeforeCommit.status)) {
-              console.log(`${COLORS.red}${t.syncBlockedAtCommit}${COLORS.reset}`);
-              printSyncBlockReason(syncBeforeCommit, t);
+            if (isSyncBlockedImpl(syncBeforeCommit.status)) {
+              consoleRef.log(`${colors.red}${t.syncBlockedAtCommit}${colors.reset}`);
+              printSyncBlockReason(syncBeforeCommit, t, colors, consoleRef, printPointerDetailsImpl);
               break;
             }
           }
 
-          await commitWithMessage(gitRoot, generated.message);
-          console.log(`${COLORS.green}${t.success}${COLORS.reset}`);
+          if (await hasStagedChangesChanged(gitRoot, analysisState)) {
+            consoleRef.log(`${colors.red}${t.stagedChangedAtCommit}${colors.reset}`);
+            consoleRef.log(`${colors.yellow}${t.stagedChangedHint}${colors.reset}`);
+            consoleRef.log(`${colors.yellow}${t.stagedChangedNeedsRegenerate}${colors.reset}`);
+            break;
+          }
+
+          await commitWithMessageImpl(gitRoot, generated.message);
+          consoleRef.log(`${colors.green}${t.success}${colors.reset}`);
           return;
         }
 
         case '2':
-          console.log(`${COLORS.yellow}${t.regenerating}${COLORS.reset}`);
+          consoleRef.log(`${colors.yellow}${t.regenerating}${colors.reset}`);
           {
             if (config.strictBranchCheck) {
-              const syncBeforeRegenerate = await getBranchPointerStatus(gitRoot, {
+              const syncBeforeRegenerate = await getBranchPointerStatusImpl(gitRoot, {
                 fetchBeforeSyncCheck: config.fetchBeforeSyncCheck,
               });
-              if (isSyncBlocked(syncBeforeRegenerate.status)) {
-                console.log(`${COLORS.red}${t.syncBlockedAtRegenerate}${COLORS.reset}`);
-                printSyncBlockReason(syncBeforeRegenerate, t);
+              if (isSyncBlockedImpl(syncBeforeRegenerate.status)) {
+                consoleRef.log(`${colors.red}${t.syncBlockedAtRegenerate}${colors.reset}`);
+                printSyncBlockReason(syncBeforeRegenerate, t, colors, consoleRef, printPointerDetailsImpl);
                 break;
               }
             }
 
-            const refreshedState = await collectAnalysisState();
+            const refreshedState = await collectAnalysisState(gitRoot, config);
             if (refreshedState.summary.total === 0) {
-              console.log(`${COLORS.yellow}${t.noChanges}${COLORS.reset}`);
+              consoleRef.log(`${colors.yellow}${t.noChanges}${colors.reset}`);
               break;
             }
 
-            printSummary(refreshedState.summary, t);
-            generated = await generateCandidate(buildPromptFromState(refreshedState));
-          }
-          if (!generated) {
-            return;
+            const regenerated = await generateCandidate(buildPromptFromState(refreshedState));
+            if (!regenerated) {
+              return;
+            }
+
+            analysisState = refreshedState;
+            printSummaryImpl(refreshedState.summary, t);
+            generated = regenerated;
           }
           break;
 
         case '3': {
-          const editedMessage = await editInEditor(generated.message, promptControl);
-          if (!editedMessage) {
-            console.log(`${COLORS.yellow}${t.editAborted}${COLORS.reset}`);
+          const editResult = await editInEditorImpl(generated.message, promptControl);
+
+          if (editResult.status === 'unchanged') {
+            consoleRef.log(`${colors.yellow}${t.editAborted}${colors.reset}`);
             break;
           }
 
-          const editedValidation = validateCommitMessage(editedMessage);
+          if (editResult.status === 'editor-failed') {
+            consoleRef.log(`${colors.red}${t.editFailed}${colors.reset}`);
+            if (editResult.error) {
+              consoleRef.log(`${colors.yellow}${editResult.error}${colors.reset}`);
+            }
+            break;
+          }
+
+          const editedValidation = validateCommitMessageImpl(editResult.message);
           if (!editedValidation.valid) {
-            console.log(`${COLORS.yellow}${t.validationFailed}${COLORS.reset}`);
-            printValidationIssues(editedValidation.blockingIssues, t);
-            console.log(`${COLORS.yellow}${t.validationNeedsAction}${COLORS.reset}`);
+            consoleRef.log(`${colors.yellow}${t.validationFailed}${colors.reset}`);
+            printValidationIssuesImpl(editedValidation.blockingIssues, t);
+            consoleRef.log(`${colors.yellow}${t.validationNeedsAction}${colors.reset}`);
             break;
           }
 
           if (editedValidation.warnings.length > 0) {
-            console.log(`${COLORS.yellow}${t.validationWarnings}${COLORS.reset}`);
-            printValidationWarnings(editedValidation.warnings, t);
+            consoleRef.log(`${colors.yellow}${t.validationWarnings}${colors.reset}`);
+            printValidationWarningsImpl(editedValidation.warnings, t);
           }
 
           if (config.strictBranchCheck) {
-            const syncBeforeCommit = await getBranchPointerStatus(gitRoot, {
+            const syncBeforeCommit = await getBranchPointerStatusImpl(gitRoot, {
               fetchBeforeSyncCheck: config.fetchBeforeSyncCheck,
             });
-            if (isSyncBlocked(syncBeforeCommit.status)) {
-              console.log(`${COLORS.red}${t.syncBlockedAtCommit}${COLORS.reset}`);
-              printSyncBlockReason(syncBeforeCommit, t);
+            if (isSyncBlockedImpl(syncBeforeCommit.status)) {
+              consoleRef.log(`${colors.red}${t.syncBlockedAtCommit}${colors.reset}`);
+              printSyncBlockReason(syncBeforeCommit, t, colors, consoleRef, printPointerDetailsImpl);
               break;
             }
           }
 
-          await commitWithMessage(gitRoot, editedValidation.message);
-          console.log(`${COLORS.green}${t.successEdited}${COLORS.reset}`);
+          if (await hasStagedChangesChanged(gitRoot, analysisState)) {
+            consoleRef.log(`${colors.red}${t.stagedChangedAtCommit}${colors.reset}`);
+            consoleRef.log(`${colors.yellow}${t.stagedChangedHint}${colors.reset}`);
+            consoleRef.log(`${colors.yellow}${t.stagedChangedNeedsRegenerate}${colors.reset}`);
+            break;
+          }
+
+          await commitWithMessageImpl(gitRoot, editedValidation.message);
+          consoleRef.log(`${colors.green}${t.successEdited}${colors.reset}`);
           return;
         }
 
         case '4':
-          console.log(`${COLORS.red}${t.cancelled}${COLORS.reset}`);
+          consoleRef.log(`${colors.red}${t.cancelled}${colors.reset}`);
           return;
 
         default:
-          console.log(`${COLORS.red}${t.invalid}${COLORS.reset}`);
+          consoleRef.log(`${colors.red}${t.invalid}${colors.reset}`);
       }
     }
   } catch (error) {
-    console.error(`${COLORS.red}${t.error}${COLORS.reset} ${error.message}`);
-    process.exitCode = 1;
+    consoleRef.error(`${colors.red}${t.error}${colors.reset} ${error.message}`);
+    processRef.exitCode = 1;
   } finally {
     promptControl.close();
   }
 }
 
-run();
+if (require.main === module) {
+  run();
+}
+
+module.exports = {
+  run,
+};

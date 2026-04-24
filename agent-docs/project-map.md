@@ -68,7 +68,8 @@ Important current rules:
 - staged-only is the default workflow
 - `autoStage` uses `git add -A`
 - generation-time diff collection is based on the current staged state
-- `Regenerate` refreshes staged context, but `Commit` does not recollect staged state before `git commit`
+- `Regenerate` refreshes staged context and rebuilds the prompt from current staged state
+- `Commit` compares the current staged snapshot against the analyzed snapshot and blocks if they differ
 - be careful not to overstate analyzed-vs-committed scope guarantees in docs or guidance
 
 ## `src/ai.js`

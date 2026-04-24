@@ -72,14 +72,32 @@ function ensureGeminiInstalled(cwd) {
   });
 }
 
+function buildPromptFileList(files) {
+  if (!files || files.length === 0) {
+    return '- None';
+  }
+
+  const basenameCounts = new Map();
+  for (const file of files) {
+    const basename = path.basename(file);
+    basenameCounts.set(basename, (basenameCounts.get(basename) || 0) + 1);
+  }
+
+  return files
+    .map((file) => {
+      const basename = path.basename(file);
+      return basenameCounts.get(basename) > 1 ? file : basename;
+    })
+    .map((file) => `- ${file}`)
+    .join('\n');
+}
+
 function buildPrompt({ t, history, userContext, diff, diffTruncated, branchContext, files }) {
   const branchName = branchContext.branch || 'None';
   const branchIssues = branchContext.issueHints.length > 0
     ? branchContext.issueHints.join(', ')
     : 'None';
-  const fileList = files.length > 0
-    ? files.map((file) => `- ${path.basename(file)}`).join('\n')
-    : '- None';
+  const fileList = buildPromptFileList(files);
 
   return `Generate a detailed git commit message in ${t.promptLang} based on the staged changes.
 Match the project style from recent history if possible.
@@ -170,12 +188,18 @@ The previous response was not usable as a commit message because of: ${validatio
 Retry and return only the commit message itself.`;
 }
 
-async function generateCommitMessage({ cwd, prompt, maxAttempts, model = DEFAULT_GEMINI_MODEL }) {
+async function generateCommitMessage({
+  cwd,
+  prompt,
+  maxAttempts,
+  model = DEFAULT_GEMINI_MODEL,
+  runGeminiImpl = runGemini,
+}) {
   let currentPrompt = prompt;
   let lastResult = null;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    const rawMessage = await runGemini(currentPrompt, cwd, model);
+    const rawMessage = await runGeminiImpl(currentPrompt, cwd, model);
     const validation = validateCommitMessage(rawMessage);
     lastResult = {
       message: validation.message,
@@ -213,6 +237,7 @@ module.exports = {
   DEFAULT_GEMINI_MODEL,
   TITLE_MAX_LENGTH,
   buildPrompt,
+  buildPromptFileList,
   classifyGeminiError,
   ensureGeminiInstalled,
   generateCommitMessage,

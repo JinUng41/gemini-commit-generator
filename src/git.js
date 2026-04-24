@@ -2,6 +2,55 @@ const { spawn } = require('child_process');
 
 const MAX_PROMPT_DIFF_CHARS = 12000;
 
+function splitDiffSections(diffText) {
+  if (!diffText) {
+    return [];
+  }
+
+  const sections = [];
+  const boundaryPattern = /^diff --git .*$/gm;
+  const matches = Array.from(diffText.matchAll(boundaryPattern));
+
+  if (matches.length === 0) {
+    return [diffText];
+  }
+
+  for (let index = 0; index < matches.length; index += 1) {
+    const start = matches[index].index;
+    const end = index + 1 < matches.length ? matches[index + 1].index : diffText.length;
+    sections.push(diffText.slice(start, end));
+  }
+
+  return sections;
+}
+
+function truncateDiffAtBoundary(diffText, maxChars) {
+  if (!diffText || diffText.length <= maxChars) {
+    return { diff: (diffText || '').trim(), truncated: false };
+  }
+
+  const sections = splitDiffSections(diffText);
+  let truncatedDiff = '';
+
+  for (const section of sections) {
+    if ((truncatedDiff + section).length <= maxChars) {
+      truncatedDiff += section;
+      continue;
+    }
+
+    if (!truncatedDiff) {
+      truncatedDiff = section.slice(0, maxChars);
+    }
+
+    return {
+      diff: truncatedDiff.trim(),
+      truncated: true,
+    };
+  }
+
+  return { diff: truncatedDiff.trim(), truncated: true };
+}
+
 function runGit(args, cwd, options = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn('git', args, {
@@ -135,6 +184,11 @@ async function getStagedSummary(cwd) {
   };
 }
 
+async function getStagedSnapshot(cwd) {
+  const result = await runGit(['diff', '--cached', '--raw', '--no-abbrev'], cwd);
+  return result.stdout;
+}
+
 async function getRecentHistory(cwd, count) {
   try {
     const result = await runGit(['log', '-n', String(count), '--pretty=format:%s'], cwd);
@@ -202,13 +256,22 @@ async function listStagedFiles(cwd) {
   return result.stdout.split('\u0000').filter(Boolean);
 }
 
+async function getStagedDiffForFiles(cwd, files) {
+  if (!files || files.length === 0) {
+    return '';
+  }
+
+  const result = await runGit(['diff', '--cached', '--', ...files], cwd);
+  return result.stdout;
+}
+
 async function collectStagedDiffContext(cwd) {
   const files = await listStagedFiles(cwd);
   let diff = '';
   let truncated = false;
 
   for (const file of files) {
-    const fileDiff = (await runGit(['diff', '--cached', '--', file], cwd)).stdout;
+    const fileDiff = await getStagedDiffForFiles(cwd, [file]);
     if (!fileDiff) {
       continue;
     }
@@ -226,7 +289,11 @@ async function collectStagedDiffContext(cwd) {
     break;
   }
 
-  return { files, diff: diff.trim(), truncated };
+  return {
+    files,
+    diff: diff.trim(),
+    truncated,
+  };
 }
 
 module.exports = {
@@ -237,7 +304,10 @@ module.exports = {
   getBranchPointerStatus,
   getGitRoot,
   getRecentHistory,
+  getStagedSnapshot,
   getStagedSummary,
   isSyncBlocked,
   stageAllChanges,
+  splitDiffSections,
+  truncateDiffAtBoundary,
 };

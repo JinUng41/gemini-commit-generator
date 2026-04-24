@@ -60,8 +60,13 @@ sequenceDiagram
         alt strictBranchCheck enabled
             GCG->>Git: Recheck branch state
         end
-        GCG->>Git: `git commit -F <temp-file>`
-        Git-->>User: Commit result
+        GCG->>Git: Compare current staged snapshot with analyzed snapshot
+        alt Staged state changed
+            GCG-->>User: Block commit and ask for regenerate
+        else Staged state unchanged
+            GCG->>Git: `git commit -F <temp-file>`
+            Git-->>User: Commit result
+        end
     else Regenerate
         alt strictBranchCheck enabled
             GCG->>Git: Recheck branch state
@@ -76,7 +81,12 @@ sequenceDiagram
             alt strictBranchCheck enabled
                 GCG->>Git: Recheck branch state
             end
-            GCG->>Git: `git commit -F <temp-file>`
+            GCG->>Git: Compare current staged snapshot with analyzed snapshot
+            alt Staged state changed
+                GCG-->>User: Block commit and ask for regenerate
+            else Staged state unchanged
+                GCG->>Git: `git commit -F <temp-file>`
+            end
         else Edited message is blocked
             GCG-->>User: Return to menu with errors
         end
@@ -98,9 +108,13 @@ By default, `gcg` looks only at what is already staged in the git index.
 That means:
 - unstaged edits are ignored
 - untracked files are ignored unless you stage them
-- the generated message should match what will actually be committed
+- the generated message reflects the staged state captured during analysis
 
 If `autoStage` is enabled, `gcg` runs `git add -A` before analysis.
+
+If the staged set changes after generation, `gcg` does not silently commit the newer staged state with the older message.
+
+Instead, it blocks commit and asks you to regenerate.
 
 ## Recent Commit History
 
@@ -192,6 +206,8 @@ Before regenerating, `gcg`:
 
 That means if you stage or unstage files while the menu is open, regenerate will use the updated staged set.
 
+This is the intended recovery path when `Commit` or `Edit` is blocked because the staged state changed after generation.
+
 ## Edit
 
 `Edit` opens your `$EDITOR`.
@@ -203,8 +219,10 @@ If `$EDITOR` is not set:
 After editing:
 - the message is validated again
 - warnings are shown if the title is long
+- an empty saved message is treated as a validation failure, not a silent cancel
 - blocking issues still prevent commit until you fix them
 - if the edited message is valid, `gcg` commits it immediately instead of returning to the menu
+- if the staged state changed while the menu was open, `gcg` blocks commit and asks you to regenerate first
 
 ## Commit
 
@@ -215,6 +233,10 @@ git commit -F <temp-file>
 ```
 
 This avoids shell escaping problems with quotes, newlines, and special characters inside the commit message.
+
+Before that commit step runs, `gcg` compares the current staged snapshot with the one used for generation.
+
+If they differ, `gcg` blocks the commit so the message is not applied to a different staged set.
 
 ## Cancel
 

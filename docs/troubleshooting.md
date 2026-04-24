@@ -175,9 +175,29 @@ Symptom:
 - you edited the message, closed the editor, and `gcg` did not commit
 
 Possible reasons:
-- the file was closed without saving
+- the file was closed without changing the message
+- the final saved message was empty
 - the final edited message still failed blocking validation
 - branch safety check failed before the commit step
+- staged changes changed after the original message was generated
+
+What to do:
+- if you meant to keep the same message, choose `Commit`
+- if you saved an empty or invalid message, edit again and fix it
+- if the staged changes changed, choose `Regenerate`
+
+## Commit Is Blocked After Staged Changes Changed
+
+Symptom:
+- `gcg` says staged changes changed after message generation and refuses to commit
+
+Meaning:
+- the message was generated from an older staged snapshot
+- the currently staged set is no longer the same one that Gemini analyzed
+
+What to do:
+- choose `Regenerate` so the message matches the current staged state
+- or manually restore the old staged set before committing
 
 ## Commit Fails After You Choose Commit
 

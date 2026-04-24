@@ -1,7 +1,14 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { normalizeCommitMessage, validateCommitMessage } = require('../src/ai');
+const {
+  buildPrompt,
+  classifyGeminiError,
+  generateCommitMessage,
+  normalizeCommitMessage,
+  validateCommitMessage,
+} = require('../src/ai');
+const { STRINGS } = require('../src/ui');
 
 test('normalizeCommitMessage strips code fences', () => {
   const raw = '```\nfeat: test\n\nfile.js: add coverage\n```';
@@ -51,4 +58,54 @@ test('validateCommitMessage blocks empty messages', () => {
   const result = validateCommitMessage('   ');
   assert.equal(result.valid, false);
   assert.deepEqual(result.blockingIssues.map((issue) => issue.code), ['empty-message', 'missing-title']);
+});
+
+test('buildPrompt uses relative paths when basenames collide', () => {
+  const prompt = buildPrompt({
+    t: STRINGS.en,
+    history: '[Docs] update workflow',
+    userContext: 'sync docs with runtime',
+    diff: 'diff --git a/src/index.js b/src/index.js',
+    diffTruncated: false,
+    branchContext: {
+      branch: 'feature/ABC-123-runtime-check',
+      issueHints: ['ABC-123'],
+    },
+    files: ['src/index.js', 'test/index.js', 'src/config.js'],
+  });
+
+  assert.match(prompt, /- src\/index\.js/);
+  assert.match(prompt, /- test\/index\.js/);
+  assert.match(prompt, /- config\.js/);
+});
+
+test('generateCommitMessage retries once after invalid output', async () => {
+  const prompts = [];
+  const responses = [
+    'Here is your commit message:\n\nfeat: broken',
+    'feat: add retry coverage',
+  ];
+
+  const result = await generateCommitMessage({
+    cwd: process.cwd(),
+    prompt: 'base prompt',
+    maxAttempts: 2,
+    runGeminiImpl: async (prompt) => {
+      prompts.push(prompt);
+      return responses.shift();
+    },
+  });
+
+  assert.equal(result.valid, true);
+  assert.equal(result.attempts, 2);
+  assert.equal(result.message, 'feat: add retry coverage');
+  assert.equal(prompts.length, 2);
+  assert.match(prompts[1], /VALIDATION FEEDBACK/);
+  assert.match(prompts[1], /meta-prefix/);
+});
+
+test('classifyGeminiError detects authentication failures', () => {
+  assert.equal(classifyGeminiError(new Error('Unauthorized: please login')), 'auth');
+  assert.equal(classifyGeminiError({ message: 'Permission denied', stderr: '' }), 'auth');
+  assert.equal(classifyGeminiError({ message: 'network timeout', stderr: 'socket hang up' }), 'generic');
 });
