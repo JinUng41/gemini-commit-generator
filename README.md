@@ -6,7 +6,7 @@
 
 ## Prerequisites
 1. [Node.js](https://nodejs.org/) `18+`
-2. [Gemini CLI](https://github.com/google/gemini-cli) installed and available as `gemini`
+2. [Gemini CLI](https://github.com/google-gemini/gemini-cli) installed and available as `gemini`
 3. Gemini CLI authentication completed once in your terminal
 
 ## Install

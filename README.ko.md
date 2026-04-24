@@ -6,7 +6,7 @@
 
 ## 사전 요구 사항
 1. [Node.js](https://nodejs.org/) `18+`
-2. [Gemini CLI](https://github.com/google/gemini-cli) 가 설치되어 있고 `gemini` 명령어로 실행 가능해야 합니다.
+2. [Gemini CLI](https://github.com/google-gemini/gemini-cli) 가 설치되어 있고 `gemini` 명령어로 실행 가능해야 합니다.
 3. 터미널에서 Gemini CLI 로그인을 한 번 완료해야 합니다.
 
 ## 설치
