@@ -1,505 +1,337 @@
 #!/usr/bin/env node
 
-const { execSync, exec, spawn } = require('child_process');
-const readline = require('readline');
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
-
-/**
- * Constants for UI Styling
- */
-const COLORS = {
-  reset: '\x1b[0m',
-  bright: '\x1b[1m',
-  green: '\x1b[32m',
-  yellow: '\x1b[33m',
-  blue: '\x1b[34m',
-  magenta: '\x1b[35m',
-  cyan: '\x1b[36m',
-  white: '\x1b[37m',
-  red: '\x1b[31m',
-  clearLine: '\x1b[K',
-};
-
-/**
- * UI Text Resources
- */
-const STRINGS = {
-  en: {
-    starting: '\n🚀 Starting AI Commit Generator...',
-    step2: 'Step 2: Checking environment and repository...',
-    step2Sync: 'Step 2: Checking local/remote branch pointers...',
-    step2Staging: 'Step 2: Staging changes and gathering data...',
-    noChanges: '✨ No changes staged. Please make some changes first.',
-    summary: '\n📊 Change Summary:',
-    filesAdded: 'new files',
-    filesModified: 'modified files',
-    filesDeleted: 'deleted files',
-    step3: '\n📝 Step 3: Provide context (Optional, press Enter to skip)',
-    step4: 'Step 4: AI is analyzing changes and drafting message...',
-    analysisDone: 'AI Analysis completed in',
-    menuTitle: '\nWhat would you like to do?',
-    menuCommit: '✅ Commit',
-    menuRegen: '🔄 Regenerate',
-    menuEdit: '✏️  Edit',
-    menuCancel: '❌ Cancel',
-    selection: 'Selection [1-4] > ',
-    success: '\n🎉 Successfully committed!',
-    regenerating: '\n🔄 Regenerating...',
-    successEdited: '\n🎉 Committed with edited message!',
-    cancelled: '\nCommit cancelled.',
-    editAborted: '\nNo changes saved. Commit aborted.',
-    invalid: 'Invalid selection.',
-    error: '\nAn unexpected error occurred:',
-    promptLang: 'English',
-    promptExample: '- index.js: Refactor AI prompt and optimize performance',
-    errNotInstalled: '❌ Gemini CLI is not installed. Please install it using: npm install -g @google/gemini-cli',
-    errNotAuthenticated: '🔑 Gemini CLI authentication required. Please run the "gemini" command in your terminal, follow the instructions to log in (e.g., Google login), and then try this program again.',
-    errNotGit: '📁 This is not a git repository. Please run this command inside a git project.',
-    syncOk: '🔒 Branch safety check passed.',
-    syncAhead: '📌 Local branch is ahead of remote by',
-    syncAheadSuffix: 'commit(s).',
-    syncNoUpstream: '⚠ No upstream branch is configured. Remote pointer comparison was skipped.',
-    syncFetchWarn: '⚠ Could not refresh remote refs (git fetch failed). Comparison may be stale.',
-    syncBehind: '❌ Remote branch is ahead of local branch. Commit blocked for safety.',
-    syncDiverged: '❌ Local and remote branches have diverged. Commit blocked for safety.',
-    syncDetached: '❌ Detached HEAD detected. Commit blocked for safety.',
-    syncHint: 'Please run git pull --rebase (or sync manually) and try again.',
-    syncPointers: 'Branch pointer status:',
-    syncLocal: 'local',
-    syncRemote: 'remote',
-    syncAheadBehind: 'ahead/behind',
-    syncBlockedAtCommit: '❌ Branch safety check failed right before commit.'
-  },
-  ko: {
-    starting: '\n🚀 AI 커밋 생성기를 시작합니다...',
-    step2: 'Step 2: 환경 및 저장소 확인 중...',
-    step2Sync: 'Step 2: 로컬/원격 브랜치 포인터 비교 중...',
-    step2Staging: 'Step 2: 변경 사항 스테이징 및 데이터 수집 중...',
-    noChanges: '✨ 스테이징된 변경 사항이 없습니다. 먼저 파일을 수정해주세요.',
-    summary: '\n📊 변경 요약:',
-    filesAdded: '개의 새 파일',
-    filesModified: '개의 수정된 파일',
-    filesDeleted: '개의 삭제된 파일',
-    step3: '\n📝 Step 3: 추가 맥락 제공 (선택 사항, 건너뛰려면 Enter)',
-    step4: 'Step 4: AI가 변경 사항을 분석하고 메시지를 작성 중입니다...',
-    analysisDone: 'AI 분석 완료:',
-    menuTitle: '\n어떻게 하시겠습니까?',
-    menuCommit: '✅ 커밋하기',
-    menuRegen: '🔄 다시 생성',
-    menuEdit: '✏️  수정하기',
-    menuCancel: '❌ 취소',
-    selection: '선택 [1-4] > ',
-    success: '\n🎉 성공적으로 커밋되었습니다!',
-    regenerating: '\n🔄 다시 생성 중...',
-    successEdited: '\n🎉 수정된 메시지로 커밋되었습니다!',
-    cancelled: '\n커밋이 취소되었습니다.',
-    editAborted: '\n저장된 변경 사항이 없습니다. 커밋이 중단되었습니다.',
-    invalid: '잘못된 선택입니다.',
-    error: '\n예상치 못한 오류가 발생했습니다:',
-    promptLang: 'KOREAN (한국어)',
-    promptExample: '- index.js: AI 프롬프트 수정 및 성능 최적화',
-    errNotInstalled: '❌ Gemini CLI가 설치되어 있지 않습니다. 다음 명령어로 설치해주세요: npm install -g @google/gemini-cli',
-    errNotAuthenticated: '🔑 Gemini CLI 인증이 필요합니다. 터미널에서 "gemini" 명령어를 입력하여 안내에 따라 구글 로그인 등을 마친 뒤 다시 실행해주세요.',
-    errNotGit: '📁 이곳은 Git 저장소가 아닙니다. Git 프로젝트 내부에서 실행해주세요.',
-    syncOk: '🔒 브랜치 안전성 확인을 통과했습니다.',
-    syncAhead: '📌 로컬 브랜치가 원격보다',
-    syncAheadSuffix: '커밋 앞서 있습니다.',
-    syncNoUpstream: '⚠ 업스트림 브랜치가 설정되지 않아 원격 포인터 비교를 건너뜁니다.',
-    syncFetchWarn: '⚠ 원격 참조 갱신(git fetch)에 실패했습니다. 비교 결과가 오래되었을 수 있습니다.',
-    syncBehind: '❌ 원격 브랜치가 로컬보다 앞서 있습니다. 안전을 위해 커밋을 차단합니다.',
-    syncDiverged: '❌ 로컬/원격 브랜치가 갈라졌습니다(diverged). 안전을 위해 커밋을 차단합니다.',
-    syncDetached: '❌ Detached HEAD 상태입니다. 안전을 위해 커밋을 차단합니다.',
-    syncHint: 'git pull --rebase(또는 수동 동기화) 후 다시 시도해주세요.',
-    syncPointers: '브랜치 포인터 상태:',
-    syncLocal: '로컬',
-    syncRemote: '원격',
-    syncAheadBehind: 'ahead/behind',
-    syncBlockedAtCommit: '❌ 커밋 직전 브랜치 안전성 검사에 실패했습니다.'
-  }
-};
-
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout
-});
-
-const question = (query) => new Promise((resolve) => rl.question(query, resolve));
-
-/**
- * Helper for asynchronous shell commands with optional stdin
- */
-const execAsync = (command, input = null) => new Promise((resolve, reject) => {
-  const child = exec(command, (error, stdout) => {
-    if (error) reject(error);
-    else resolve(stdout);
-  });
-  if (input) {
-    child.stdin.write(input);
-    child.stdin.end();
-  }
-});
-
-/**
- * Advanced loading spinner function
- */
-function startSpinner(message) {
-  const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-  let i = 0;
-  let currentMessage = message;
-  const interval = setInterval(() => {
-    process.stdout.write(`\r${COLORS.cyan}${frames[i]} ${currentMessage}${COLORS.reset}${COLORS.clearLine}`);
-    i = (i + 1) % frames.length;
-  }, 80);
-
-  return {
-    update: (newMessage) => {
-      currentMessage = newMessage;
-    },
-    stop: (symbol = '✔', color = COLORS.green) => {
-      clearInterval(interval);
-      process.stdout.write(`\r${color}${symbol} ${currentMessage}${COLORS.reset}${COLORS.clearLine}\n`);
-    }
-  };
-}
-
-/**
- * Get a summary of staged changes
- */
-async function getChangeSummary() {
-  const status = await execAsync('git status --porcelain');
-  const lines = status.split('\n').filter(line => line.trim());
-  
-  let added = 0, modified = 0, deleted = 0;
-  lines.forEach(line => {
-    const s = line.substring(0, 2);
-    if (s.includes('?') || s.includes('A')) added++;
-    else if (s.includes('M')) modified++;
-    else if (s.includes('D')) deleted++;
-  });
-
-  return { added, modified, deleted };
-}
-
-/**
- * Open system editor to edit the message
- */
-async function editInEditor(initialContent) {
-  const tmpEditPath = path.join(os.tmpdir(), `gcg-edit-${Date.now()}.txt`);
-  fs.writeFileSync(tmpEditPath, initialContent);
-  
-  const initialStat = fs.statSync(tmpEditPath);
-
-  const editorCommand = process.env.EDITOR || (os.platform() === 'win32' ? 'notepad' : 'vi');
-  
-  // Pause readline to give control to the editor
-  rl.pause();
-
-  return new Promise((resolve) => {
-    // Use shell: true to handle editor commands with arguments (e.g., "code --wait")
-    const child = spawn(editorCommand, [tmpEditPath], { 
-      stdio: 'inherit',
-      shell: true 
-    });
-    
-    child.on('exit', () => {
-      // Resume readline after editor closes
-      rl.resume();
-      
-      const finalStat = fs.statSync(tmpEditPath);
-      const editedContent = fs.readFileSync(tmpEditPath, 'utf8').trim();
-      
-      let result = null;
-      // Check if the file was actually saved (mtime changed) and is not empty
-      if (finalStat.mtimeMs > initialStat.mtimeMs && editedContent) {
-        result = editedContent;
-      }
-
-      if (fs.existsSync(tmpEditPath)) fs.unlinkSync(tmpEditPath);
-      resolve(result);
-    });
-  });
-}
-
-/**
- * Helper to commit using a message from a string, handling special characters safely
- */
-async function commitWithMessage(message) {
-  const tmpMsgPath = path.join(os.tmpdir(), `gcg-msg-${Date.now()}.txt`);
-  fs.writeFileSync(tmpMsgPath, message);
-  try {
-    execSync(`git commit -F "${tmpMsgPath}"`);
-  } finally {
-    if (fs.existsSync(tmpMsgPath)) fs.unlinkSync(tmpMsgPath);
-  }
-}
-
-/**
- * Compare local and upstream branch pointers
- */
-async function getBranchPointerStatus() {
-  const branch = (await execAsync('git rev-parse --abbrev-ref HEAD')).trim();
-  if (branch === 'HEAD') {
-    return { status: 'detached', branch };
-  }
-
-  let upstream;
-  try {
-    upstream = (await execAsync('git rev-parse --abbrev-ref --symbolic-full-name @{u}')).trim();
-  } catch (e) {
-    return { status: 'no-upstream', branch };
-  }
-
-  let fetchError = null;
-  try {
-    await execAsync('git fetch --quiet');
-  } catch (e) {
-    fetchError = e.message;
-  }
-
-  const localHead = (await execAsync('git rev-parse HEAD')).trim();
-  const remoteHead = (await execAsync('git rev-parse @{u}')).trim();
-  const countText = (await execAsync('git rev-list --left-right --count HEAD...@{u}')).trim();
-  const [aheadStr = '0', behindStr = '0'] = countText.split(/\s+/);
-  const ahead = Number(aheadStr) || 0;
-  const behind = Number(behindStr) || 0;
-
-  let status = 'up-to-date';
-  if (ahead > 0 && behind > 0) status = 'diverged';
-  else if (behind > 0) status = 'behind';
-  else if (ahead > 0) status = 'ahead';
-
-  return { status, branch, upstream, localHead, remoteHead, ahead, behind, fetchError };
-}
-
-function isSyncBlocked(status) {
-  return status === 'behind' || status === 'diverged' || status === 'detached';
-}
-
-function printPointerDetails(sync, t, color = COLORS.yellow) {
-  if (!sync || !sync.localHead || !sync.remoteHead || !sync.upstream) return;
-  console.log(`${color}${t.syncPointers}${COLORS.reset}`);
-  console.log(`  ${t.syncLocal} (${sync.branch}): ${sync.localHead}`);
-  console.log(`  ${t.syncRemote} (${sync.upstream}): ${sync.remoteHead}`);
-  console.log(`  ${t.syncAheadBehind}: ${sync.ahead}/${sync.behind}`);
-}
+const {
+  COLORS,
+  STRINGS,
+  createPrompt,
+  selectLanguage,
+  startSpinner,
+  printConfigWarnings,
+  printSummary,
+  printPointerDetails,
+  printValidationIssues,
+  printValidationWarnings,
+  printCommitMessage,
+} = require('./src/ui');
+const { loadConfig } = require('./src/config');
+const {
+  getGitRoot,
+  getBranchPointerStatus,
+  isSyncBlocked,
+  stageAllChanges,
+  getStagedSummary,
+  collectStagedDiffContext,
+  getRecentHistory,
+  getBranchContext,
+} = require('./src/git');
+const {
+  ensureGeminiInstalled,
+  buildPrompt,
+  generateCommitMessage,
+  classifyGeminiError,
+  validateCommitMessage,
+} = require('./src/ai');
+const { editInEditor, commitWithMessage } = require('./src/commit');
+const { notifyComplete } = require('./src/notifier');
 
 function printSyncBlockReason(sync, t) {
-  if (sync.status === 'behind') console.error(`${COLORS.red}${t.syncBehind}${COLORS.reset}`);
-  else if (sync.status === 'diverged') console.error(`${COLORS.red}${t.syncDiverged}${COLORS.reset}`);
-  else console.error(`${COLORS.red}${t.syncDetached}${COLORS.reset}`);
+  if (sync.status === 'behind') {
+    console.error(`${COLORS.red}${t.syncBehind}${COLORS.reset}`);
+  } else if (sync.status === 'diverged') {
+    console.error(`${COLORS.red}${t.syncDiverged}${COLORS.reset}`);
+  } else {
+    console.error(`${COLORS.red}${t.syncDetached}${COLORS.reset}`);
+  }
+
   printPointerDetails(sync, t, COLORS.yellow);
   console.error(`${COLORS.yellow}${t.syncHint}${COLORS.reset}`);
 }
 
-async function enforceBranchSafety(t) {
-  const sync = await getBranchPointerStatus();
-  if (isSyncBlocked(sync.status)) {
-    printSyncBlockReason(sync, t);
-    return sync;
+function printSyncStatus(sync, t) {
+  if (!sync) {
+    return;
   }
-  return sync;
+
+  if (sync.fetchError) {
+    console.log(`${COLORS.yellow}${t.syncFetchWarn}${COLORS.reset}`);
+  }
+
+  if (sync.status === 'no-upstream') {
+    console.log(`${COLORS.yellow}${t.syncNoUpstream}${COLORS.reset}`);
+  } else if (sync.status === 'ahead') {
+    console.log(`${COLORS.yellow}${t.syncAhead} ${sync.ahead} ${t.syncAheadSuffix}${COLORS.reset}`);
+  } else if (sync.status === 'up-to-date') {
+    console.log(`${COLORS.green}${t.syncOk}${COLORS.reset}`);
+  }
 }
 
-/**
- * Main Logic
- */
 async function run(selectedLang = null) {
-  let lang = selectedLang;
-  
-  if (!lang) {
-    while (true) {
-      console.log(`${COLORS.cyan}\n🌐 Step 1: Select Language / Step 1: 언어 선택${COLORS.reset}`);
-      console.log(`1) English`);
-      console.log(`2) 한국어`);
-      const langChoice = await question('Selection [1-2] > ');
-      if (langChoice === '1') {
-        lang = 'en';
-        break;
-      } else if (langChoice === '2') {
-        lang = 'ko';
-        break;
-      }
-      console.log(`${COLORS.red}Invalid selection. Please choose 1 or 2. / 잘못된 선택입니다. 1 또는 2를 선택해주세요.${COLORS.reset}`);
-    }
-  }
-  
-  const t = STRINGS[lang];
-  console.log(`${COLORS.magenta}${t.starting}${COLORS.reset}`);
-  
-  const step2 = startSpinner(t.step2);
-  
-  try {
-    // 1. Validate Environment
-    try {
-      await execAsync('gemini --version');
-    } catch (e) {
-      step2.stop('❌', COLORS.red);
-      console.error(`${COLORS.red}${t.errNotInstalled}${COLORS.reset}`);
-      rl.close();
-      process.exit(1);
-    }
+  const promptControl = createPrompt();
+  let t = STRINGS.en;
 
+  try {
+    const lang = selectedLang || await selectLanguage(promptControl.question);
+    t = STRINGS[lang];
+
+    console.log(`${COLORS.magenta}${t.starting}${COLORS.reset}`);
+
+    const step2 = startSpinner(t.step2);
+
+    let gitRoot;
     try {
-      await execAsync('git rev-parse --is-inside-work-tree');
-    } catch (e) {
+      gitRoot = await getGitRoot(process.cwd());
+    } catch (error) {
       step2.stop('❌', COLORS.red);
       console.error(`${COLORS.red}${t.errNotGit}${COLORS.reset}`);
-      rl.close();
-      process.exit(1);
+      process.exitCode = 1;
+      return;
     }
 
-    step2.update(t.step2Sync);
-    const preflightSync = await getBranchPointerStatus();
-    if (isSyncBlocked(preflightSync.status)) {
+    try {
+      await ensureGeminiInstalled(gitRoot);
+    } catch (error) {
       step2.stop('❌', COLORS.red);
-      printSyncBlockReason(preflightSync, t);
-      rl.close();
-      process.exit(1);
+      console.error(`${COLORS.red}${t.errNotInstalled}${COLORS.reset}`);
+      process.exitCode = 1;
+      return;
     }
 
-    step2.update(t.step2Staging);
-    execSync('git add .');
-    
-    const [summary, diffRaw, history] = await Promise.all([
-      getChangeSummary(),
-      execAsync('git diff --cached -- . ":(exclude)*.lock" ":(exclude)package-lock.json"'),
-      execAsync('git log -n 3 --pretty=format:"%s"')
-    ]);
+    const { config, warnings } = loadConfig(gitRoot, t);
 
-    if (summary.added === 0 && summary.modified === 0 && summary.deleted === 0) {
+    let preflightSync = null;
+    if (config.strictBranchCheck) {
+      step2.update(t.step2Sync);
+      preflightSync = await getBranchPointerStatus(gitRoot, {
+        fetchBeforeSyncCheck: config.fetchBeforeSyncCheck,
+      });
+
+      if (isSyncBlocked(preflightSync.status)) {
+        step2.stop('❌', COLORS.red);
+        printSyncBlockReason(preflightSync, t);
+        process.exitCode = 1;
+        return;
+      }
+    }
+
+    step2.update(config.autoStage ? t.step2AutoStage : t.step2UsingStaged);
+
+    const collectAnalysisState = async () => {
+      if (config.autoStage) {
+        await stageAllChanges(gitRoot);
+      }
+
+      const [summary, diffContext, history, branchContext] = await Promise.all([
+        getStagedSummary(gitRoot),
+        collectStagedDiffContext(gitRoot),
+        getRecentHistory(gitRoot, config.historyCount),
+        getBranchContext(gitRoot),
+      ]);
+
+      return { summary, diffContext, history, branchContext };
+    };
+
+    const initialState = await collectAnalysisState();
+    const { summary } = initialState;
+
+    if (summary.total === 0) {
       step2.stop('⚠', COLORS.yellow);
       console.log(`${COLORS.yellow}${t.noChanges}${COLORS.reset}`);
-      rl.close();
       return;
     }
 
     step2.stop();
-    if (preflightSync.fetchError) {
-      console.log(`${COLORS.yellow}${t.syncFetchWarn}${COLORS.reset}`);
-    }
-    if (preflightSync.status === 'no-upstream') {
-      console.log(`${COLORS.yellow}${t.syncNoUpstream}${COLORS.reset}`);
-    } else if (preflightSync.status === 'ahead') {
-      console.log(`${COLORS.yellow}${t.syncAhead} ${preflightSync.ahead} ${t.syncAheadSuffix}${COLORS.reset}`);
-    } else if (preflightSync.status === 'up-to-date') {
-      console.log(`${COLORS.green}${t.syncOk}${COLORS.reset}`);
+    printConfigWarnings(warnings, t);
+
+    if (config.strictBranchCheck) {
+      printSyncStatus(preflightSync, t);
+    } else {
+      console.log(`${COLORS.yellow}${t.syncCheckDisabled}${COLORS.reset}`);
     }
 
-    // 2. Show Summary
-    console.log(`${COLORS.magenta}${t.summary}${COLORS.reset}`);
-    if (summary.added > 0) console.log(`  ${COLORS.green}+ ${summary.added} ${t.filesAdded}${COLORS.reset}`);
-    if (summary.modified > 0) console.log(`  ${COLORS.yellow}~ ${summary.modified} ${t.filesModified}${COLORS.reset}`);
-    if (summary.deleted > 0) console.log(`  ${COLORS.red}- ${summary.deleted} ${t.filesDeleted}${COLORS.reset}`);
+    console.log(config.autoStage
+      ? `${COLORS.yellow}${t.autoStageNotice}${COLORS.reset}`
+      : `${COLORS.green}${t.stagedOnlyNotice}${COLORS.reset}`);
 
-    let diff = diffRaw;
-    if (diff.length > 3000) {
-      diff = diff.substring(0, 3000) + '\n\n...(diff truncated for performance)';
-    }
+    printSummary(summary, t);
 
-    // 3. User Context
     console.log(`${COLORS.cyan}${t.step3}${COLORS.reset}`);
-    const userContext = await question('> ');
+    const userContext = await promptControl.question('> ');
 
-    // 4. AI Analysis
-    console.log('');
-    const step4 = startSpinner(t.step4);
-    
-    const prompt = `Generate a detailed git commit message in ${t.promptLang} based on the diff.
-Match the project style from recent history if possible.
+    const buildPromptFromState = (state) => buildPrompt({
+      t,
+      history: state.history,
+      userContext,
+      diff: state.diffContext.diff,
+      diffTruncated: state.diffContext.truncated,
+      branchContext: state.branchContext,
+      files: state.diffContext.files,
+    });
 
-[STYLE HISTORY]
-${history}
+    const generateCandidate = async (prompt) => {
+      console.log('');
+      const step4 = startSpinner(t.step4);
+      const startTime = Date.now();
 
-[USER CONTEXT]
-${userContext || 'None'}
+      try {
+        const result = await generateCommitMessage({
+          cwd: gitRoot,
+          prompt,
+          maxAttempts: 2,
+        });
 
-[DIFF]
-${diff}
+        const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+        step4.update(`${t.analysisDone} ${duration}s`);
+        step4.stop();
+        notifyComplete(config);
 
-[FORMAT]
-1. TITLE: A concise summary (max 50 chars), starting with a type (feat, fix, refactor, style, docs, chore).
-2. BODY: Detailed explanation of changes. 
-   - For each changed file, use ONLY the FILENAME (exclude directory paths) followed by a description of what changed.
-   - Example: "${t.promptExample}"
-3. Use a blank line between TITLE and BODY.
-4. Output ONLY the commit message without any markdown backticks or quotes.`;
+        if (result.attempts > 1) {
+          console.log(`${COLORS.yellow}${t.validationRetrying}${COLORS.reset}`);
+        }
 
-    const startTime = Date.now();
-    let aiMsg;
-    try {
-      aiMsg = await execAsync('gemini -p - -m flash -e ""', prompt);
-      aiMsg = aiMsg.trim();
-    } catch (e) {
-      step4.stop('❌', COLORS.red);
-      console.error(`\n${COLORS.red}${t.errNotAuthenticated}${COLORS.reset}`);
-      console.error(`${COLORS.red}${t.error} ${e.message}${COLORS.reset}`);
-      rl.close();
-      process.exit(1);
+        printCommitMessage(result.message);
+        if (result.warnings.length > 0) {
+          console.log(`${COLORS.yellow}${t.validationWarnings}${COLORS.reset}`);
+          printValidationWarnings(result.warnings, t);
+        }
+        if (!result.valid) {
+          console.log(`${COLORS.yellow}${t.validationFailed}${COLORS.reset}`);
+          printValidationIssues(result.blockingIssues, t);
+          console.log(`${COLORS.yellow}${t.validationNeedsAction}${COLORS.reset}`);
+        }
+
+        return result;
+      } catch (error) {
+        step4.stop('❌', COLORS.red);
+        const errorType = classifyGeminiError(error);
+        if (errorType === 'auth') {
+          console.error(`${COLORS.red}${t.errNotAuthenticated}${COLORS.reset}`);
+        } else {
+          console.error(`${COLORS.red}${t.errGeminiFailed}${COLORS.reset}`);
+          if (error.stderr) {
+            console.error(`${COLORS.red}${error.stderr.trim()}${COLORS.reset}`);
+          }
+        }
+
+        process.exitCode = 1;
+        return null;
+      }
+    };
+
+    let generated = await generateCandidate(buildPromptFromState(initialState));
+    if (!generated) {
+      return;
     }
-    
-    const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-    step4.update(`${t.analysisDone} ${duration}s`);
-    step4.stop();
 
-    console.log(`${COLORS.white}\n--------------------------------------------${COLORS.reset}`);
-    console.log(`${COLORS.green}${aiMsg}${COLORS.reset}`);
-    console.log(`${COLORS.white}--------------------------------------------${COLORS.reset}`);
-
-    // 5. Interactive Selection
     while (true) {
       console.log(`${COLORS.cyan}${t.menuTitle}${COLORS.reset}`);
       console.log(`1) ${t.menuCommit}`);
       console.log(`2) ${t.menuRegen}`);
       console.log(`3) ${t.menuEdit}`);
       console.log(`4) ${t.menuCancel}`);
-      
-      const choice = await question(t.selection);
+
+      const choice = await promptControl.question(t.selection);
 
       switch (choice) {
-        case '1':
-          const syncBeforeCommit = await enforceBranchSafety(t);
-          if (isSyncBlocked(syncBeforeCommit.status)) {
-            console.log(`${COLORS.red}${t.syncBlockedAtCommit}${COLORS.reset}`);
+        case '1': {
+          if (!generated.valid) {
+            console.log(`${COLORS.red}${t.validationNeedsAction}${COLORS.reset}`);
+            printValidationIssues(generated.blockingIssues, t);
             break;
           }
-          await commitWithMessage(aiMsg);
-          console.log(`${COLORS.green}${t.success}${COLORS.reset}`);
-          rl.close();
-          return;
-        case '2':
-          console.log(`${COLORS.yellow}${t.regenerating}${COLORS.reset}`);
-          return run(lang); 
-        case '3':
-          const editedMsg = await editInEditor(aiMsg);
-          if (editedMsg) {
-            const syncBeforeEditedCommit = await enforceBranchSafety(t);
-            if (isSyncBlocked(syncBeforeEditedCommit.status)) {
+
+          if (config.strictBranchCheck) {
+            const syncBeforeCommit = await getBranchPointerStatus(gitRoot, {
+              fetchBeforeSyncCheck: config.fetchBeforeSyncCheck,
+            });
+            if (isSyncBlocked(syncBeforeCommit.status)) {
               console.log(`${COLORS.red}${t.syncBlockedAtCommit}${COLORS.reset}`);
+              printSyncBlockReason(syncBeforeCommit, t);
               break;
             }
-            await commitWithMessage(editedMsg);
-            console.log(`${COLORS.green}${t.successEdited}${COLORS.reset}`);
-            rl.close();
+          }
+
+          await commitWithMessage(gitRoot, generated.message);
+          console.log(`${COLORS.green}${t.success}${COLORS.reset}`);
+          return;
+        }
+
+        case '2':
+          console.log(`${COLORS.yellow}${t.regenerating}${COLORS.reset}`);
+          {
+            if (config.strictBranchCheck) {
+              const syncBeforeRegenerate = await getBranchPointerStatus(gitRoot, {
+                fetchBeforeSyncCheck: config.fetchBeforeSyncCheck,
+              });
+              if (isSyncBlocked(syncBeforeRegenerate.status)) {
+                console.log(`${COLORS.red}${t.syncBlockedAtRegenerate}${COLORS.reset}`);
+                printSyncBlockReason(syncBeforeRegenerate, t);
+                break;
+              }
+            }
+
+            const refreshedState = await collectAnalysisState();
+            if (refreshedState.summary.total === 0) {
+              console.log(`${COLORS.yellow}${t.noChanges}${COLORS.reset}`);
+              break;
+            }
+
+            printSummary(refreshedState.summary, t);
+            generated = await generateCandidate(buildPromptFromState(refreshedState));
+          }
+          if (!generated) {
             return;
-          } else {
-            console.log(`${COLORS.yellow}${t.editAborted}${COLORS.reset}`);
           }
           break;
+
+        case '3': {
+          const editedMessage = await editInEditor(generated.message, promptControl);
+          if (!editedMessage) {
+            console.log(`${COLORS.yellow}${t.editAborted}${COLORS.reset}`);
+            break;
+          }
+
+          const editedValidation = validateCommitMessage(editedMessage);
+          if (!editedValidation.valid) {
+            console.log(`${COLORS.yellow}${t.validationFailed}${COLORS.reset}`);
+            printValidationIssues(editedValidation.blockingIssues, t);
+            console.log(`${COLORS.yellow}${t.validationNeedsAction}${COLORS.reset}`);
+            break;
+          }
+
+          if (editedValidation.warnings.length > 0) {
+            console.log(`${COLORS.yellow}${t.validationWarnings}${COLORS.reset}`);
+            printValidationWarnings(editedValidation.warnings, t);
+          }
+
+          if (config.strictBranchCheck) {
+            const syncBeforeCommit = await getBranchPointerStatus(gitRoot, {
+              fetchBeforeSyncCheck: config.fetchBeforeSyncCheck,
+            });
+            if (isSyncBlocked(syncBeforeCommit.status)) {
+              console.log(`${COLORS.red}${t.syncBlockedAtCommit}${COLORS.reset}`);
+              printSyncBlockReason(syncBeforeCommit, t);
+              break;
+            }
+          }
+
+          await commitWithMessage(gitRoot, editedValidation.message);
+          console.log(`${COLORS.green}${t.successEdited}${COLORS.reset}`);
+          return;
+        }
+
         case '4':
           console.log(`${COLORS.red}${t.cancelled}${COLORS.reset}`);
-          rl.close();
           return;
+
         default:
           console.log(`${COLORS.red}${t.invalid}${COLORS.reset}`);
       }
     }
-
   } catch (error) {
-    console.error(`${COLORS.red}${t.error}${COLORS.reset}`, error.message);
-    rl.close();
-    process.exit(1);
+    console.error(`${COLORS.red}${t.error}${COLORS.reset} ${error.message}`);
+    process.exitCode = 1;
+  } finally {
+    promptControl.close();
   }
 }
 

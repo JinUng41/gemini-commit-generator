@@ -4,11 +4,14 @@
   "private": false,
   "description": "AI-powered git commit message generator using Gemini CLI",
   "main": "index.js",
+  "scripts": {
+    "test": "node --test"
+  },
   "bin": {
     "gcg": "index.js"
   },
   "engines": {
-    "node": ">=14.0.0"
+    "node": ">=18.0.0"
   },
   "keywords": [
     "git",
