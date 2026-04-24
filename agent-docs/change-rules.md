@@ -34,6 +34,26 @@ If unsure, treat the task as complex.
 
 Do not skip step 4.
 
+## TDD Workflow
+
+For logic or behavior changes, default to TDD.
+
+Use red-green-refactor when practical:
+- start with a failing test that captures the intended behavior or regression
+- make the smallest implementation change that turns the test green
+- refactor only after the behavior is covered and passing
+
+Before subagent review:
+- keep the relevant tests green
+- run the broader verification that matches the change, such as `npm test`
+
+If a change falls under a trivial exception, TDD is not required, but relevant verification still is.
+
+Common exceptions:
+- docs-only changes
+- wording-only changes
+- comment-only changes
+
 ## What Local Verification Means
 
 At minimum, run the checks that match the change.

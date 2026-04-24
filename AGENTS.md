@@ -59,6 +59,17 @@ Do not declare complex work complete until a subagent has reviewed it.
 
 Self-evaluation may be used as a supplement, but never as a replacement for subagent review on complex work.
 
+## TDD Expectation
+
+For logic or behavior changes, default to TDD.
+
+Use a red-green-refactor workflow when practical:
+- write a failing test first
+- make the smallest change that passes
+- refactor after the behavior is covered
+
+Trivial docs-only, wording-only, or comment-only changes are exceptions.
+
 ## Non-Negotiable Product Rules
 
 ### 1. Staged-only is the default
