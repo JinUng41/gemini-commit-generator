@@ -7,6 +7,10 @@ function parseCliArgs(argv = []) {
     return { command: 'help' };
   }
 
+  if (argv.length === 1 && (argv[0] === 'version' || argv[0] === '-v' || argv[0] === '--version')) {
+    return { command: 'version' };
+  }
+
   if (argv.length === 1 && argv[0] === 'config') {
     return { command: 'config' };
   }

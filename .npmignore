@@ -3,6 +3,9 @@ DEVELOPMENT_LOG.md
 .gitignore
 .gemini/
 .opencode/
+AGENTS.md
+agent-docs/
+test/
 
 # System Files
 .DS_Store

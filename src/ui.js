@@ -232,14 +232,16 @@ function printHelp(consoleRef = console) {
   consoleRef.log('Usage');
   consoleRef.log('  gcg');
   consoleRef.log('  gcg config');
-  consoleRef.log('  gcg help');
   consoleRef.log('');
   consoleRef.log('What it does');
   consoleRef.log('  gcg writes a commit message with Gemini');
   consoleRef.log('');
   consoleRef.log('Commands');
   consoleRef.log('  config   open settings');
-  consoleRef.log('  help     show help');
+  consoleRef.log('');
+  consoleRef.log('Options');
+  consoleRef.log('  -h, --help       show help');
+  consoleRef.log('  -v, --version    show version');
   consoleRef.log('');
   consoleRef.log('Tip');
   consoleRef.log('  Save a default language with `gcg config`');

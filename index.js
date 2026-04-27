@@ -42,6 +42,7 @@ const {
 } = require('./src/ai');
 const { editInEditor, commitWithMessage } = require('./src/commit');
 const { notifyComplete } = require('./src/notifier');
+const { version: packageVersion } = require('./package.json');
 
 function printSyncBlockReason(sync, t, colors, consoleRef, printPointerDetailsImpl) {
   if (sync.status === 'behind') {
@@ -422,6 +423,7 @@ async function run(selectedLang = null, overrides = {}) {
 async function execute(argv = process.argv.slice(2), overrides = {}) {
   const parseCliArgsImpl = overrides.parseCliArgs || parseCliArgs;
   const printHelpImpl = overrides.printHelp || printHelp;
+  const packageVersionImpl = overrides.packageVersion ?? packageVersion;
   const runConfigMenuImpl = overrides.runConfigMenu || runConfigMenu;
   const createPromptImpl = overrides.createPrompt || createPrompt;
   const loadGlobalSettingsImpl = overrides.loadGlobalSettings || loadGlobalSettings;
@@ -440,6 +442,11 @@ async function execute(argv = process.argv.slice(2), overrides = {}) {
 
   if (parsedArgs.command === 'help') {
     printHelpImpl(consoleRef);
+    return;
+  }
+
+  if (parsedArgs.command === 'version') {
+    consoleRef.log(packageVersionImpl);
     return;
   }
 

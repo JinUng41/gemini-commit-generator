@@ -14,6 +14,12 @@ test('parseCliArgs supports config command', () => {
   assert.deepEqual(parseCliArgs(['config']), { command: 'config' });
 });
 
+test('parseCliArgs supports version forms', () => {
+  assert.deepEqual(parseCliArgs(['version']), { command: 'version' });
+  assert.deepEqual(parseCliArgs(['-v']), { command: 'version' });
+  assert.deepEqual(parseCliArgs(['--version']), { command: 'version' });
+});
+
 test('parseCliArgs rejects unknown arguments', () => {
   const result = parseCliArgs(['unknown']);
 

@@ -64,7 +64,7 @@ function createOverrides(custom = {}) {
   return {
     console: consoleSpy,
     process: processRef,
-    createPrompt: () => createPromptControl(custom.answers || ['', '4']),
+    createPrompt: custom.createPrompt || (() => createPromptControl(custom.answers || ['', '4'])),
     selectLanguage: custom.selectLanguage,
     startSpinner: custom.startSpinner || (() => createSpinner()),
     printHelp: custom.printHelp,
@@ -110,6 +110,7 @@ function createOverrides(custom = {}) {
     setGlobalLanguage: custom.setGlobalLanguage || (async () => {}),
     resetGlobalLanguage: custom.resetGlobalLanguage || (async () => ({})),
     notifyComplete: () => {},
+    packageVersion: custom.packageVersion,
   };
 }
 
@@ -122,6 +123,29 @@ test('execute prints help for help command', async () => {
 
   assert.match(overrides.console.lines.join('\n'), /Usage/);
   assert.match(overrides.console.lines.join('\n'), /gcg config/);
+  assert.match(overrides.console.lines.join('\n'), /--version/);
+});
+
+test('execute prints package version without starting interactive flow', async () => {
+  for (const arg of ['version', '-v', '--version']) {
+    const overrides = createOverrides({
+      packageVersion: '9.8.7',
+      createPrompt: () => {
+        throw new Error('createPrompt should not be called');
+      },
+      loadGlobalSettings: () => {
+        throw new Error('loadGlobalSettings should not be called');
+      },
+      selectLanguage: async () => {
+        throw new Error('selectLanguage should not be called');
+      },
+    });
+
+    await execute([arg], overrides);
+
+    assert.deepEqual(overrides.console.lines, ['9.8.7']);
+    assert.equal(overrides.process.exitCode, 0);
+  }
 });
 
 test('execute uses saved default language without prompting', async () => {
