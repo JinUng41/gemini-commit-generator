@@ -16,10 +16,10 @@ const COLORS = {
 const STRINGS = {
   en: {
     starting: '\n🚀 Starting AI Commit Generator...',
-    step2: 'Step 2: Checking environment and repository...',
-    step2Sync: 'Step 2: Checking local/remote branch pointers...',
-    step2AutoStage: 'Step 2: Auto-staging changes...',
-    step2UsingStaged: 'Step 2: Gathering staged changes...',
+    step2: 'Checking setup...',
+    step2Sync: 'Checking branch status...',
+    step2AutoStage: 'Staging changes...',
+    step2UsingStaged: 'Reading staged changes...',
     noChanges: '✨ No staged changes found. Run git add first or enable autoStage in .gcgrc.json.',
     stagedOnlyNotice: 'Using staged changes only.',
     autoStageNotice: 'autoStage is enabled, so changes were staged with git add -A.',
@@ -27,9 +27,9 @@ const STRINGS = {
     filesAdded: 'new files',
     filesModified: 'modified files',
     filesDeleted: 'deleted files',
-    step3: '\n📝 Step 3: Provide context (Optional, press Enter to skip)',
-    step4: 'Step 4: AI is analyzing changes and drafting message...',
-    analysisDone: 'AI Analysis completed in',
+    step3: '\n📝 Add context (optional, press Enter to skip)',
+    step4: 'Generating commit message...',
+    analysisDone: 'Message generated in',
     menuTitle: '\nWhat would you like to do?',
     menuCommit: '✅ Commit',
     menuRegen: '🔄 Regenerate',
@@ -91,10 +91,10 @@ const STRINGS = {
   },
   ko: {
     starting: '\n🚀 AI 커밋 생성기를 시작합니다...',
-    step2: 'Step 2: 환경 및 저장소 확인 중...',
-    step2Sync: 'Step 2: 로컬/원격 브랜치 포인터 비교 중...',
-    step2AutoStage: 'Step 2: 변경 사항 자동 스테이징 중...',
-    step2UsingStaged: 'Step 2: 스테이징된 변경 사항 수집 중...',
+    step2: '설정 확인 중...',
+    step2Sync: '브랜치 상태 확인 중...',
+    step2AutoStage: '변경 사항 스테이징 중...',
+    step2UsingStaged: '스테이징된 변경 사항 확인 중...',
     noChanges: '✨ 스테이징된 변경 사항이 없습니다. 먼저 git add를 실행하거나 .gcgrc.json에서 autoStage를 켜주세요.',
     stagedOnlyNotice: '현재 스테이징된 변경 사항만 사용합니다.',
     autoStageNotice: 'autoStage가 활성화되어 있어 git add -A로 변경 사항을 스테이징했습니다.',
@@ -102,9 +102,9 @@ const STRINGS = {
     filesAdded: '개의 새 파일',
     filesModified: '개의 수정된 파일',
     filesDeleted: '개의 삭제된 파일',
-    step3: '\n📝 Step 3: 추가 맥락 제공 (선택 사항, 건너뛰려면 Enter)',
-    step4: 'Step 4: AI가 변경 사항을 분석하고 메시지를 작성 중입니다...',
-    analysisDone: 'AI 분석 완료:',
+    step3: '\n📝 추가 설명 입력 (선택, 건너뛰려면 Enter)',
+    step4: '커밋 메시지 생성 중...',
+    analysisDone: '메시지 생성 완료:',
     menuTitle: '\n어떻게 하시겠습니까?',
     menuCommit: '✅ 커밋하기',
     menuRegen: '🔄 다시 생성',
@@ -211,7 +211,7 @@ async function selectLanguage(question, options = {}) {
       shouldShowConfigHint = false;
     }
 
-    consoleRef.log(`${COLORS.cyan}\n🌐 Step 1: Select Language / Step 1: 언어 선택${COLORS.reset}`);
+    consoleRef.log(`${COLORS.cyan}\n🌐 Select Language / 언어 선택${COLORS.reset}`);
     consoleRef.log('1) English');
     consoleRef.log('2) 한국어');
     const langChoice = await question('Selection [1-2] > ');

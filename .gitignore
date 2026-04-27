@@ -5,6 +5,9 @@ Thumbs.db
 # Node.js
 node_modules/
 
+# Agent workspace files
+.opencode/
+
 # AI Commit Generator Temp Files
 gcg-edit-*.txt
 gcg-msg-*.txt

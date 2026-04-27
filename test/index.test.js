@@ -28,10 +28,29 @@ function createConsoleSpy() {
   };
 }
 
-function createSpinner() {
+function createSpinner(events = []) {
+  let currentMessage = null;
+
   return {
-    update: () => {},
-    stop: () => {},
+    start(message) {
+      currentMessage = message;
+      events.push({ type: 'start', message });
+    },
+    update(message) {
+      currentMessage = message;
+      events.push({ type: 'update', message });
+    },
+    stop(symbol = '✔') {
+      events.push({ type: 'stop', message: currentMessage, symbol });
+    },
+  };
+}
+
+function createSpinnerRecorder(events) {
+  return (message) => {
+    const spinner = createSpinner(events);
+    spinner.start(message);
+    return spinner;
   };
 }
 
@@ -47,7 +66,7 @@ function createOverrides(custom = {}) {
     process: processRef,
     createPrompt: () => createPromptControl(custom.answers || ['', '4']),
     selectLanguage: custom.selectLanguage,
-    startSpinner: () => createSpinner(),
+    startSpinner: custom.startSpinner || (() => createSpinner()),
     printHelp: custom.printHelp,
     printConfigWarnings: () => {},
     printSummary: () => {},
@@ -57,7 +76,7 @@ function createOverrides(custom = {}) {
     printCommitMessage: () => {},
     runConfigMenu: custom.runConfigMenu,
     parseCliArgs: custom.parseCliArgs,
-    loadConfig: () => ({
+    loadConfig: custom.loadConfig || (() => ({
       config: {
         autoStage: false,
         historyCount: 5,
@@ -66,9 +85,10 @@ function createOverrides(custom = {}) {
         fetchBeforeSyncCheck: false,
       },
       warnings: [],
-    }),
+    })),
     getGitRoot: async () => '/repo',
     ensureGeminiInstalled: async () => {},
+    stageAllChanges: custom.stageAllChanges || (async () => {}),
     getBranchPointerStatus: custom.getBranchPointerStatus || (async () => ({ status: 'up-to-date' })),
     isSyncBlocked: (status) => status === 'behind' || status === 'diverged' || status === 'detached',
     getStagedSummary: custom.getStagedSummary || (async () => ({ added: 1, modified: 0, deleted: 0, total: 1 })),
@@ -136,6 +156,81 @@ test('execute shows config hint when no default language is set', async () => {
   await execute([], overrides);
 
   assert.equal(showConfigHint, true);
+});
+
+test('execute omits numbered step labels when using saved default language', async () => {
+  const spinnerEvents = [];
+  const overrides = createOverrides({
+    answers: ['', '4'],
+    loadGlobalSettings: () => ({ settings: { language: 'ko' } }),
+    selectLanguage: async () => {
+      throw new Error('selectLanguage should not be called');
+    },
+    startSpinner: createSpinnerRecorder(spinnerEvents),
+  });
+
+  await execute([], overrides);
+
+  const consoleOutput = overrides.console.lines.join('\n');
+  const spinnerOutput = spinnerEvents.map((event) => event.message).join('\n');
+  assert.doesNotMatch(`${consoleOutput}\n${spinnerOutput}`, /\bStep [1-4]\b/);
+  assert.ok(spinnerEvents.some((event) => event.message === '설정 확인 중...'));
+  assert.ok(spinnerEvents.some((event) => event.message === '브랜치 상태 확인 중...'));
+  assert.ok(spinnerEvents.some((event) => event.message === '스테이징된 변경 사항 확인 중...'));
+  assert.ok(spinnerEvents.some((event) => event.message === '커밋 메시지 생성 중...'));
+  assert.ok(spinnerEvents.some((event) => event.message.startsWith('메시지 생성 완료:')));
+});
+
+test('execute omits numbered step labels when language is selected interactively', async () => {
+  const spinnerEvents = [];
+  const overrides = createOverrides({
+    answers: ['2', '', '4'],
+    startSpinner: createSpinnerRecorder(spinnerEvents),
+  });
+
+  await execute([], overrides);
+
+  const consoleOutput = overrides.console.lines.join('\n');
+  const spinnerOutput = spinnerEvents.map((event) => event.message).join('\n');
+  assert.match(consoleOutput, /Select Language \/ 언어 선택/);
+  assert.doesNotMatch(`${consoleOutput}\n${spinnerOutput}`, /\bStep [1-4]\b/);
+});
+
+test('run shows concise spinner message for autoStage', async () => {
+  const spinnerEvents = [];
+  const overrides = createOverrides({
+    answers: ['', '4'],
+    startSpinner: createSpinnerRecorder(spinnerEvents),
+    loadConfig: () => ({
+      config: {
+        autoStage: true,
+        historyCount: 5,
+        notifyOnComplete: false,
+        strictBranchCheck: false,
+        fetchBeforeSyncCheck: false,
+      },
+      warnings: [],
+    }),
+  });
+
+  await run('en', overrides);
+
+  const spinnerOutput = spinnerEvents.map((event) => event.message).join('\n');
+  assert.match(spinnerOutput, /Staging changes\.\.\./);
+  assert.doesNotMatch(spinnerOutput, /\bStep [1-4]\b/);
+});
+
+test('run keeps concise spinner message when no staged changes exist', async () => {
+  const spinnerEvents = [];
+  const overrides = createOverrides({
+    startSpinner: createSpinnerRecorder(spinnerEvents),
+    getStagedSummary: async () => ({ added: 0, modified: 0, deleted: 0, total: 0 }),
+  });
+
+  await run('en', overrides);
+
+  assert.ok(spinnerEvents.some((event) => event.type === 'stop' && event.message === 'Reading staged changes...'));
+  assert.doesNotMatch(spinnerEvents.map((event) => event.message).join('\n'), /\bStep [1-4]\b/);
 });
 
 test('execute runs config menu and saves selected language', async () => {
@@ -206,8 +301,10 @@ test('run regenerates from refreshed staged state', async () => {
   ];
   const snapshots = ['snap-1', 'snap-2'];
   const prompts = [];
+  const spinnerEvents = [];
   const overrides = createOverrides({
     answers: ['', '2', '4'],
+    startSpinner: createSpinnerRecorder(spinnerEvents),
     collectStagedDiffContext: async () => diffStates.shift(),
     getStagedSnapshot: async () => snapshots.shift(),
     generateCommitMessage: async ({ prompt }) => {
@@ -225,6 +322,8 @@ test('run regenerates from refreshed staged state', async () => {
   await run('en', overrides);
 
   assert.deepEqual(prompts, ['src/first.js:first diff', 'src/second.js:second diff']);
+  assert.equal(spinnerEvents.filter((event) => event.type === 'start' && event.message === 'Generating commit message...').length, 2);
+  assert.doesNotMatch(spinnerEvents.map((event) => event.message).join('\n'), /\bStep [1-4]\b/);
 });
 
 test('run treats empty edited message as validation failure', async () => {

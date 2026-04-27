@@ -93,10 +93,12 @@ Possible interaction:
 ```text
 $ gcg
 Tip: save a default language with `gcg config`
-Step 1: choose language
-Step 2: staged changes are collected
-Step 3: optionally describe why the change exists
-Step 4: Gemini drafts a message
+Select Language / 언어 선택
+Starting AI Commit Generator...
+Checking setup...
+Reading staged changes...
+Add context (optional, press Enter to skip)
+Generating commit message...
 ```
 
 Then you can commit or adjust the result.
