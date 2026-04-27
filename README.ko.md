@@ -14,11 +14,6 @@
 npm install -g @devjinung41/gemini-commit-generator
 ```
 
-현재 저장소 소스로 바로 연결해 개발용으로 쓰려면:
-```bash
-npm link
-```
-
 ## 빠른 시작
 1. 커밋에 넣을 파일을 먼저 stage 합니다.
 ```bash

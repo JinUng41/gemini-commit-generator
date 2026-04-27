@@ -14,11 +14,6 @@
 npm install -g @devjinung41/gemini-commit-generator
 ```
 
-For local development from this repository:
-```bash
-npm link
-```
-
 ## Quick Start
 1. Stage the files you want in the commit.
 ```bash

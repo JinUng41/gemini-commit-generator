@@ -33,14 +33,6 @@ Install from npm:
 npm install -g @devjinung41/gemini-commit-generator
 ```
 
-If you are developing this repository locally, you can link the current source instead:
-
-```bash
-npm link
-```
-
-That makes the local `gcg` command use the source code from this checkout.
-
 ## First Run
 
 Run `gcg` inside a git repository:
@@ -118,27 +110,6 @@ Then choose:
 If you choose `Reset`, `gcg` removes the saved default language.
 
 When that leaves `~/.config/gcg/settings.json` empty, `gcg` deletes the file.
-
-## Local Development Usage
-
-If you are working on this repository itself, these commands are the fastest feedback loop:
-
-```bash
-npm test
-npm link
-```
-
-Then in another git repository:
-
-```bash
-gcg
-```
-
-If you do not want to link globally, you can run the source directly:
-
-```bash
-node /path/to/gemini-commit-generator/index.js
-```
 
 ## Common First-Run Mistakes
 
