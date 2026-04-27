@@ -2,6 +2,7 @@
 DEVELOPMENT_LOG.md
 .gitignore
 .gemini/
+.opencode/
 
 # System Files
 .DS_Store
